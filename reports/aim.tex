@@ -1,0 +1,60 @@
+\documentclass{article}
+\usepackage{float}
+
+\author{Devansh Tripathi}
+\title{CS2323: Extending the RISC-V Simulator to Support Pipelining and Hazard Handling}
+\date{}
+
+\begin{document}
+\maketitle
+\newpage
+\tableofcontents
+\newpage
+\section{Objective}
+To enhance the existing single-cycle RISC-V simulator by implementing an instruction pipeline (IF, ID, EX, MEM, WB) adn supporting data, control, and structural hazard handling mechanisms.
+
+The goal is to demonstrate the impact of pipelining on performance and compare various pipeline configurations.
+
+\section{Motivation}
+The current in-house simulator executes one instruction per cycle (single-cycle). However, this does not reflect the behaviour of real processors nowadays.
+
+Pipelining is an architectural optimization that improves the cycle count by overlapping multiple instructions.
+
+This project aims to modify the current simulator by introducing configurable pipelining functionality to it, which can demonstrate:
+\begin{itemize}
+    \item Pipeline performance improvements.
+    \item Differetn types of hazards and their effects.
+    \item The impact of hazard mitigation techniques like forwarding and branch prediction.
+\end{itemize}
+
+\section{Proposed Enhancements}
+The enhanced simulator will support the following configurable execution modes:
+\begin{table}[H]
+\begin{tabular}{ll}
+\textbf{Mode} & \textbf{Description}                                    \\
+0             & Single-cycle                                            \\
+1             & Pipelined with no hazard handling                       \\
+2             & Pipelined with hazard detection (stalling only)         \\
+3             & Pipelined with hazard detection and data forwarding     \\
+4             & Pipelined with hazard + static branch prediction        \\
+5             & Pipelined with hazard + dynamic 1-bit branch prediction
+\end{tabular}
+\end{table}
+
+These modes can be toggled with a configuration file or a command line flag.
+
+\section{Functional Scope}
+\begin{enumerate}
+    \item \textbf{Pipeline Stage Simulation}
+    \begin{itemize}
+        \item Implement the five stages (IF, ID, EX, MEM, WB)
+        \item Introduce pipeline registers between stages (IF/ID, ID/EX, EX/MEM, MEM/WB)
+    \end{itemize}
+
+    \item \textbf{Hazard Handling}
+    
+\end{enumerate}
+
+\section{Testing and Validation}
+\section{Deliverables}
+\end{document}

@@ -23,82 +23,112 @@
 #include <queue>
 #include <atomic>
 
+// Load the instruction set and instruction encoding.
 using instruction_set::Instruction;
 using instruction_set::get_instr_encoding;
 
-
+// Call the base class constructor, write the initial
+// register and VM states to a file.
 RVSSVM::RVSSVM() : VmBase() {
   DumpRegisters(globals::registers_dump_file_path, registers_);
   DumpState(globals::vm_state_dump_file_path);
 }
 
+// Initialise the desructor.
 RVSSVM::~RVSSVM() = default;
 
+// Fetch the current instruction (IF stage).
 void RVSSVM::Fetch() {
   current_instruction_ = memory_controller_.ReadWord(program_counter_);
   UpdateProgramCounter(4);
 }
 
+// Decode the current instruction (ID stage).
 void RVSSVM::Decode() {
   control_unit_.SetControlSignals(current_instruction_);
 }
 
+// Execute the current instruction (EX stage).
 void RVSSVM::Execute() {
+  // Get the opcode of the instruction.
   uint8_t opcode = current_instruction_ & 0b1111111;
+  // Get the funct3 of the instruction.
   uint8_t funct3 = (current_instruction_ >> 12) & 0b111;
 
+  // Syscall instruction.
   if (opcode == get_instr_encoding(Instruction::kecall).opcode && 
       funct3 == get_instr_encoding(Instruction::kecall).funct3) {
     HandleSyscall();
     return;
   }
 
+  // Float instruction, hand over to float execution unit.
   if (instruction_set::isFInstruction(current_instruction_)) { // RV64 F
     ExecuteFloat();
     return;
+  
+  // Double instruction, hand over to respective unit.
   } else if (instruction_set::isDInstruction(current_instruction_)) {
     ExecuteDouble();
     return;
+  // CSR.
   } else if (opcode==0b1110011) {
     ExecuteCsr();
     return;
   }
 
+  // Find out rs1 and rs2.
   uint8_t rs1 = (current_instruction_ >> 15) & 0b11111;
   uint8_t rs2 = (current_instruction_ >> 20) & 0b11111;
 
+  // Find the immediate value.
   int32_t imm = ImmGenerator(current_instruction_);
 
+  // Retrieve the values stored in rs1 and rs2.
   uint64_t reg1_value = registers_.ReadGpr(rs1);
   uint64_t reg2_value = registers_.ReadGpr(rs2);
 
+  // Overflow check.
   bool overflow = false;
 
+  // Check if the second operand comes from rs2 or the immediate.
+  // If it is the immediate then replace reg2_value with the sign-extended immediate value.
   if (control_unit_.GetAluSrc()) {
     reg2_value = static_cast<uint64_t>(static_cast<int64_t>(imm));
   }
 
+  // Find the operation to execute.
   alu::AluOp aluOperation = control_unit_.GetAluSignal(current_instruction_, control_unit_.GetAluOp());
+  // Perform the computation and check for overflow.
   std::tie(execution_result_, overflow) = alu_.execute(aluOperation, reg1_value, reg2_value);
 
-
+  // If the instruction is a branch type instruction.
   if (control_unit_.GetBranch()) {
+    // Check if the opcode was for jal or jalr.
     if (opcode==get_instr_encoding(Instruction::kjalr).opcode || 
         opcode==get_instr_encoding(Instruction::kjal).opcode) {
+      
+      // Store the return point.
       next_pc_ = static_cast<int64_t>(program_counter_); // PC was already updated in Fetch()
+      // Go back to the previous instruction.
       UpdateProgramCounter(-4);
       return_address_ = program_counter_ + 4;
+      // If it is jalr, then jump to the address stored in the register.
       if (opcode==get_instr_encoding(Instruction::kjalr).opcode) { 
         UpdateProgramCounter(-program_counter_ + (execution_result_));
+      // For jal, jump by the immediate offset.
       } else if (opcode==get_instr_encoding(Instruction::kjal).opcode) {
         UpdateProgramCounter(imm);
       }
+      
+      // Match with branching instructions.
     } else if (opcode==get_instr_encoding(Instruction::kbeq).opcode ||
                opcode==get_instr_encoding(Instruction::kbne).opcode ||
                opcode==get_instr_encoding(Instruction::kblt).opcode ||
                opcode==get_instr_encoding(Instruction::kbge).opcode ||
                opcode==get_instr_encoding(Instruction::kbltu).opcode ||
                opcode==get_instr_encoding(Instruction::kbgeu).opcode) {
+      // Match the function exactly and check the conditions.
       switch (funct3) {
         case 0b000: {// BEQ
           branch_flag_ = (execution_result_==0);
@@ -132,20 +162,23 @@ void RVSSVM::Execute() {
 
   }
 
-  
+  // Branch with the offset if condition is true.
   if (branch_flag_ && opcode==0b1100011) {
     UpdateProgramCounter(-4);
     UpdateProgramCounter(imm);
   }
 
-
+  // AUIPC instruction.
   if (opcode==get_instr_encoding(Instruction::kauipc).opcode) { // AUIPC
     execution_result_ = static_cast<int64_t>(program_counter_) - 4 + (imm << 12);
 
   }
 }
 
+// Float execution.
 void RVSSVM::ExecuteFloat() {
+  // Get the opcode, funct3, funct7, rs2, rs1, rs3.
+  // Some instructions like fmadd, fmsub have 3 source registers.
   uint8_t opcode = current_instruction_ & 0b1111111;
   uint8_t funct3 = (current_instruction_ >> 12) & 0b111;
   uint8_t funct7 = (current_instruction_ >> 25) & 0b1111111;
@@ -156,34 +189,45 @@ void RVSSVM::ExecuteFloat() {
 
   uint8_t fcsr_status = 0;
 
+  // Retrieve the immediate value.
   int32_t imm = ImmGenerator(current_instruction_);
 
+  // Check for dynamic rounding of the result (fetch from CPU instead of sticking to a fixed type).
   if (rm==0b111) {
     rm = registers_.ReadCsr(0x002);
   }
 
+  // Compute the register values.
   uint64_t reg1_value = registers_.ReadFpr(rs1);
   uint64_t reg2_value = registers_.ReadFpr(rs2);
   uint64_t reg3_value = registers_.ReadFpr(rs3);
 
+  // Check if the opcodes match with instructions like fmv, fcvt, where rs1 is an integer register.
+  // If so, then read it's value as an int, not a float.
   if (funct7==0b1101000 || funct7==0b1111000 || opcode==0b0000111 || opcode==0b0100111) {
     reg1_value = registers_.ReadGpr(rs1);
   }
 
+  // Check if the second operand value comes from the immediate and not rs2.
+  // Copy the immediate value into reg2_value if so.
   if (control_unit_.GetAluSrc()) {
     reg2_value = static_cast<uint64_t>(static_cast<int64_t>(imm));
   }
 
+  // Determine the operation to be performed.
   alu::AluOp aluOperation = control_unit_.GetAluSignal(current_instruction_, control_unit_.GetAluOp());
+  // Perform the operation.
   std::tie(execution_result_, fcsr_status) = alu::Alu::fpexecute(aluOperation, reg1_value, reg2_value, reg3_value, rm);
 
   // std::cout << "+++++ Float execution result: " << execution_result_ << std::endl;
 
-
+  // Write the CSR status.
   registers_.WriteCsr(0x003, fcsr_status);
 }
 
+// Double Instruction Execution.
 void RVSSVM::ExecuteDouble() {
+  // Similar to float, load the necessary values.
   uint8_t opcode = current_instruction_ & 0b1111111;
   uint8_t funct3 = (current_instruction_ >> 12) & 0b111;
   uint8_t funct7 = (current_instruction_ >> 25) & 0b1111111;
@@ -194,24 +238,31 @@ void RVSSVM::ExecuteDouble() {
 
   uint8_t fcsr_status = 0;
 
+  // Load the immediate.
   int32_t imm = ImmGenerator(current_instruction_);
 
+  // Load the float values of the source registers.
   uint64_t reg1_value = registers_.ReadFpr(rs1);
   uint64_t reg2_value = registers_.ReadFpr(rs2);
   uint64_t reg3_value = registers_.ReadFpr(rs3);
 
+  // Check if the instruction uses int regs, update accordingly.
   if (funct7==0b1101001 || funct7==0b1111001 || opcode==0b0000111 || opcode==0b0100111) {
     reg1_value = registers_.ReadGpr(rs1);
   }
 
+  // Check if second operance uses immediate, update accordingly.
   if (control_unit_.GetAluSrc()) {
     reg2_value = static_cast<uint64_t>(static_cast<int64_t>(imm));
   }
 
+  // Determine the operation.
   alu::AluOp aluOperation = control_unit_.GetAluSignal(current_instruction_, control_unit_.GetAluOp());
+  // Perform the operation.
   std::tie(execution_result_, fcsr_status) = alu::Alu::dfpexecute(aluOperation, reg1_value, reg2_value, reg3_value, rm);
 }
 
+// CSR execution. To be checked.
 void RVSSVM::ExecuteCsr() {
   uint8_t rs1 = (current_instruction_ >> 15) & 0b11111;
   uint16_t csr = (current_instruction_ >> 20) & 0xFFF;
@@ -397,15 +448,19 @@ void RVSSVM::HandleSyscall() {
   }
 }
 
+// Write to memory (MEM stage).
 void RVSSVM::WriteMemory() {
+  // Get the opcode, rs2 and funct3 of the instruction.
   uint8_t opcode = current_instruction_ & 0b1111111;
   uint8_t rs2 = (current_instruction_ >> 20) & 0b11111;
   uint8_t funct3 = (current_instruction_ >> 12) & 0b111;
 
+  // Check for ecall/ebreak.
   if (opcode == 0b1110011 && funct3 == 0b000) {
     return;
   }
 
+  // Handle F/D instructions separately.
   if (instruction_set::isFInstruction(current_instruction_)) { // RV64 F
     WriteMemoryFloat();
     return;
@@ -414,7 +469,9 @@ void RVSSVM::WriteMemory() {
     return;
   }
 
+  // If the instruction is to load data from memory.
   if (control_unit_.GetMemRead()) {
+    // Check the function type and act accordingly.
     switch (funct3) {
       case 0b000: {// LB
         memory_result_ = static_cast<int8_t>(memory_controller_.ReadByte(execution_result_));
@@ -453,17 +510,23 @@ void RVSSVM::WriteMemory() {
 
   // TODO: use direct read to read memory for undo/redo functionality, i.e. ReadByte -> ReadByte_d
 
-
+  // If instruction type is to write to memory.
   if (control_unit_.GetMemWrite()) {
+    // Match the opcode and act accordingly.
     switch (funct3) {
       case 0b000: {// SB
+        // Find the memory address.
         addr = execution_result_;
+        // Store the current byte at that position - useful for undo/redo.
         old_bytes_vec.push_back(memory_controller_.ReadByte(addr));
+        // Write the new byte to the location.
         memory_controller_.WriteByte(execution_result_, registers_.ReadGpr(rs2) & 0xFF);
+        // Store the new byte for redo functionality.
         new_bytes_vec.push_back(memory_controller_.ReadByte(addr));
         break;
       }
       case 0b001: {// SH
+        // Same thing as the first case repeated elsewhere, only here we use an offset to loop through the bytes.
         addr = execution_result_;
         for (size_t i = 0; i < 2; ++i) {
           old_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
@@ -499,6 +562,7 @@ void RVSSVM::WriteMemory() {
     }
   }
 
+  // If we have a change, then push the changes.
   if (old_bytes_vec != new_bytes_vec) {
     current_delta_.memory_changes.push_back({
       addr,
@@ -508,9 +572,12 @@ void RVSSVM::WriteMemory() {
   }
 }
 
+// Memory access for float.
 void RVSSVM::WriteMemoryFloat() {
+  // Get rs2.
   uint8_t rs2 = (current_instruction_ >> 20) & 0b11111;
 
+  // flw instruction.
   if (control_unit_.GetMemRead()) { // FLW
     memory_result_ = memory_controller_.ReadWord(execution_result_);
   }
@@ -521,6 +588,7 @@ void RVSSVM::WriteMemoryFloat() {
   std::vector<uint8_t> old_bytes_vec;
   std::vector<uint8_t> new_bytes_vec;
 
+  // Store the float into memory, similar to integer register.
   if (control_unit_.GetMemWrite()) { // FSW
     addr = execution_result_;
     for (size_t i = 0; i < 4; ++i) {
@@ -539,6 +607,7 @@ void RVSSVM::WriteMemoryFloat() {
   }
 }
 
+// Memory access for double, same as float.
 void RVSSVM::WriteMemoryDouble() {
   uint8_t rs2 = (current_instruction_ >> 20) & 0b11111;
 
@@ -566,7 +635,9 @@ void RVSSVM::WriteMemoryDouble() {
   }
 }
 
+// Write back to register file (WB stage).
 void RVSSVM::WriteBack() {
+  // Load the opcode, funct3, rm and immediate.
   uint8_t opcode = current_instruction_ & 0b1111111;
   uint8_t funct3 = (current_instruction_ >> 12) & 0b111;
   uint8_t rd = (current_instruction_ >> 7) & 0b11111;
@@ -577,6 +648,7 @@ void RVSSVM::WriteBack() {
     return;
   }
 
+  // Separate handling for F/D/CSR.
   if (instruction_set::isFInstruction(current_instruction_)) { // RV64 F
     WriteBackFloat();
     return;
@@ -588,28 +660,33 @@ void RVSSVM::WriteBack() {
     return;
   }
 
+  // Get rd.
   uint64_t old_reg = registers_.ReadGpr(rd);
   unsigned int reg_index = rd;
   unsigned int reg_type = 0; // 0 for GPR, 1 for CSR, 2 for FPR
 
-
+  // Writing to the register.
   if (control_unit_.GetRegWrite()) { 
     switch (opcode) {
+      // For R/I/AIUPC write the execution result to rd.
       case get_instr_encoding(Instruction::kRtype).opcode: /* R-Type */
       case get_instr_encoding(Instruction::kItype).opcode: /* I-Type */
       case get_instr_encoding(Instruction::kauipc).opcode: /* AUIPC */ {
         registers_.WriteGpr(rd, execution_result_);
         break;
       }
+      // For load type, write the value loaded from memory.
       case get_instr_encoding(Instruction::kLoadType).opcode: /* Load */ { 
         registers_.WriteGpr(rd, memory_result_);
         break;
       }
+      // For jal/jalr write the value of PC.
       case get_instr_encoding(Instruction::kjalr).opcode: /* JALR */
       case get_instr_encoding(Instruction::kjal).opcode: /* JAL */ {
         registers_.WriteGpr(rd, next_pc_);
         break;
       }
+      // For LUI, write the immediate shifted by 12 bits.
       case get_instr_encoding(Instruction::klui).opcode: /* LUI */ {
         registers_.WriteGpr(rd, (imm << 12));
         break;
@@ -626,14 +703,18 @@ void RVSSVM::WriteBack() {
     // Updated in Execute()
   }
 
+  // Store the new reg value.
   uint64_t new_reg = registers_.ReadGpr(rd);
+  // Push changes.
   if (old_reg!=new_reg) {
     current_delta_.register_changes.push_back({reg_index, reg_type, old_reg, new_reg});
   }
 
 }
 
+// Register writing for float.
 void RVSSVM::WriteBackFloat() {
+  // Load up opcode, funct7, rd.
   uint8_t opcode = current_instruction_ & 0b1111111;
   uint8_t funct7 = (current_instruction_ >> 25) & 0b1111111;
   uint8_t rd = (current_instruction_ >> 7) & 0b11111;
@@ -643,9 +724,10 @@ void RVSSVM::WriteBackFloat() {
   unsigned int reg_type = 2; // 0 for GPR, 1 for CSR, 2 for FPR
   uint64_t new_reg = 0;
 
+  // Check if we are writing to the register.
   if (control_unit_.GetRegWrite()) {
     switch(funct7) {
-      // write to GPR
+      // write to GPR for comparison/conversion/moving to int reg.
       case get_instr_encoding(Instruction::kfle_s).funct7: // f(eq|lt|le).s
       case get_instr_encoding(Instruction::kfcvt_w_s).funct7: // fcvt.(w|wu|l|lu).s
       case get_instr_encoding(Instruction::kfmv_x_w).funct7: // fmv.x.w , fclass.s
@@ -657,9 +739,10 @@ void RVSSVM::WriteBackFloat() {
         break;
       }
 
-      // write to FPR
+      // write to FPR for other instructions.
       default: {
         switch (opcode) {
+          // Write from memory for laod type.
           case get_instr_encoding(Instruction::kflw).opcode: {
             old_reg = registers_.ReadFpr(rd);
             registers_.WriteFpr(rd, memory_result_);
@@ -667,7 +750,7 @@ void RVSSVM::WriteBackFloat() {
             reg_type = 2; // FPR
             break;
           }
-
+          // Write from ALU for others.
           default: {
             old_reg = registers_.ReadFpr(rd);
             registers_.WriteFpr(rd, execution_result_);
@@ -703,12 +786,15 @@ void RVSSVM::WriteBackFloat() {
     // }
   }
 
+  // Push changes.
   if (old_reg!=new_reg) {
     current_delta_.register_changes.push_back({reg_index, reg_type, old_reg, new_reg});
   }
 }
 
+// Memory access for double, similar to float.
 void RVSSVM::WriteBackDouble() {
+  // Load opcode, funct7, rd.
   uint8_t opcode = current_instruction_ & 0b1111111;
   uint8_t funct7 = (current_instruction_ >> 25) & 0b1111111;
   uint8_t rd = (current_instruction_ >> 7) & 0b11111;
@@ -718,8 +804,9 @@ void RVSSVM::WriteBackDouble() {
   unsigned int reg_type = 2; // 0 for GPR, 1 for CSR, 2 for FPR
   uint64_t new_reg = 0;
 
+  // Check if we are writing.
   if (control_unit_.GetRegWrite()) {
-    // write to GPR
+    // write to GPR for comparison, conversion, moving.
     if (funct7==0b1010001
         || funct7==0b1100001
         || funct7==0b1110001) { // f(eq|lt|le).d, fcvt.(w|wu|l|lu).d
@@ -730,11 +817,13 @@ void RVSSVM::WriteBackDouble() {
     }
       // write to FPR
     else if (opcode==0b0000111) {
+      // Write from memory for loading.
       old_reg = registers_.ReadFpr(rd);
       registers_.WriteFpr(rd, memory_result_);
       new_reg = memory_result_;
       reg_type = 2; // FPR
     } else {
+      // Write from ALU otherwise.
       old_reg = registers_.ReadFpr(rd);
       registers_.WriteFpr(rd, execution_result_);
       new_reg = execution_result_;
@@ -742,6 +831,7 @@ void RVSSVM::WriteBackDouble() {
     }
   }
 
+  // Push changes.
   if (old_reg!=new_reg) {
     current_delta_.register_changes.push_back({reg_index, reg_type, old_reg, new_reg});
   }
@@ -749,6 +839,7 @@ void RVSSVM::WriteBackDouble() {
   return;
 }
 
+// CSR writing.
 void RVSSVM::WriteBackCsr() {
   uint8_t rd = (current_instruction_ >> 7) & 0b11111;
   uint8_t funct3 = (current_instruction_ >> 12) & 0b111;
@@ -796,40 +887,61 @@ void RVSSVM::WriteBackCsr() {
 
 }
 
+// RUN.
 void RVSSVM::Run() {
+  // Clear the stop flag, clearing the VM to run.
   ClearStop();
+  // Number of instructions executed.
   uint64_t instruction_executed = 0;
 
+  // Keep going as long as we don't want to stop or PC exceeds the max program size.
   while (!stop_requested_ && program_counter_ < program_size_) {
+    // Check if max instructions are exceeded.
     if (instruction_executed > vm_config::config.getInstructionExecutionLimit())
       break;
 
+    // Fetch the instruction.
     Fetch();
+    // Decode the instruction.
     Decode();
+    // Execute the operation.
     Execute();
+    // Access memory.
     WriteMemory();
+    // Write to register file.
     WriteBack();
+    // Increment the insturction counters and cycles.
     instructions_retired_++;
     instruction_executed++;
     cycle_s_++;
+    // Log the PC.
     std::cout << "Program Counter: " << program_counter_ << std::endl;
   }
   if (program_counter_ >= program_size_) {
     std::cout << "VM_PROGRAM_END" << std::endl;
     output_status_ = "VM_PROGRAM_END";
   }
+  // DUmp the register and memory states.
   DumpRegisters(globals::registers_dump_file_path, registers_);
   DumpState(globals::vm_state_dump_file_path);
 }
 
+// Run with debugging.
 void RVSSVM::DebugRun() {
+  // Clear the VM to run.
   ClearStop();
+  // Instructions executed.
   uint64_t instruction_executed = 0;
+  // Keep iterating until EOF or exceeding program size.
   while (!stop_requested_ && program_counter_ < program_size_) {
     if (instruction_executed > vm_config::config.getInstructionExecutionLimit())
       break;
+    // Store old PC (for undo/redo).
     current_delta_.old_pc = program_counter_;
+    
+    // Breakpoint check.
     if (std::find(breakpoints_.begin(), breakpoints_.end(), program_counter_) == breakpoints_.end()) {
+      // Execute normally.
       Fetch();
       Decode();
       Execute();
@@ -840,13 +952,16 @@ void RVSSVM::DebugRun() {
       cycle_s_++;
       std::cout << "Program Counter: " << program_counter_ << std::endl;
 
+      // Store the new PC.
       current_delta_.new_pc = program_counter_;
       // history_.push(current_delta_);
+      // Push into undo stack.
       undo_stack_.push(current_delta_);
       while (!redo_stack_.empty()) {
         redo_stack_.pop();
       }
       current_delta_ = StepDelta();
+      // Step reporting.
       if (program_counter_ < program_size_) {
         std::cout << "VM_STEP_COMPLETED" << std::endl;
         output_status_ = "VM_STEP_COMPLETED";
@@ -854,13 +969,16 @@ void RVSSVM::DebugRun() {
         std::cout << "VM_LAST_INSTRUCTION_STEPPED" << std::endl;
         output_status_ = "VM_LAST_INSTRUCTION_STEPPED";
       }
+      // Dump states.
       DumpRegisters(globals::registers_dump_file_path, registers_);
       DumpState(globals::vm_state_dump_file_path);
 
+      // Add a pause between the steps.
       unsigned int delay_ms = vm_config::config.getRunStepDelay();
       std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
       
     } else {
+      // On hitting a breakpoint.
       std::cout << "VM_BREAKPOINT_HIT " << program_counter_ << std::endl;
       output_status_ = "VM_BREAKPOINT_HIT";
       break;
@@ -870,13 +988,18 @@ void RVSSVM::DebugRun() {
     std::cout << "VM_PROGRAM_END" << std::endl;
     output_status_ = "VM_PROGRAM_END";
   }
+  // Dump state.
   DumpRegisters(globals::registers_dump_file_path, registers_);
   DumpState(globals::vm_state_dump_file_path);
 }
 
+// Take a single step.
 void RVSSVM::Step() {
+  // Store the old PC.
   current_delta_.old_pc = program_counter_;
+  // Go forward if permitted.
   if (program_counter_ < program_size_) {
+    // Execute for one cycle.
     Fetch();
     Decode();
     Execute();
@@ -914,13 +1037,15 @@ void RVSSVM::Step() {
   DumpState(globals::vm_state_dump_file_path);
 }
 
+// Undo the step.
 void RVSSVM::Undo() {
+  // Empty stack check.
   if (undo_stack_.empty()) {
     std::cout << "VM_NO_MORE_UNDO" << std::endl;
     output_status_ = "VM_NO_MORE_UNDO";
     return;
   }
-
+  // Get the last set of changes.
   StepDelta last = undo_stack_.top();
   undo_stack_.pop();
 
@@ -931,6 +1056,7 @@ void RVSSVM::Undo() {
 
   // StepDelta last = history_.undo();
 
+  // Write changes to registers.
   for (const auto &change : last.register_changes) {
     switch (change.reg_type) {
       case 0: { // GPR
@@ -950,32 +1076,39 @@ void RVSSVM::Undo() {
     }
   }
 
+  // Write changes to memory.
   for (const auto &change : last.memory_changes) {
     for (size_t i = 0; i < change.old_bytes_vec.size(); ++i) {
       memory_controller_.WriteByte(change.address + i, change.old_bytes_vec[i]);
     }
   }
 
+  // Restore PC, instruction count and cycles.
   program_counter_ = last.old_pc;
   instructions_retired_--;
-  cycle_s_--;
+  cycle_s_--; 
   std::cout << "Program Counter: " << program_counter_ << std::endl;
 
+  // Push the previous state to the redo stack.
   redo_stack_.push(last);
 
   output_status_ = "VM_UNDO_COMPLETED";
   std::cout << "VM_UNDO_COMPLETED" << std::endl;
 
+  // Dump state.
   DumpRegisters(globals::registers_dump_file_path, registers_);
   DumpState(globals::vm_state_dump_file_path);
 }
 
+// Redo the step.
 void RVSSVM::Redo() {
+  // Empty stack check.
   if (redo_stack_.empty()) {
     std::cout << "VM_NO_MORE_REDO" << std::endl;
     return;
   }
 
+  // Get te change.
   StepDelta next = redo_stack_.top();
   redo_stack_.pop();
 
@@ -986,6 +1119,7 @@ void RVSSVM::Redo() {
 
   //   StepDelta next = history_.redo();
 
+  // Write register changes.
   for (const auto &change : next.register_changes) {
     switch (change.reg_type) {
       case 0: { // GPR
@@ -1005,23 +1139,29 @@ void RVSSVM::Redo() {
     }
   }
 
+  // Write memory changes.
   for (const auto &change : next.memory_changes) {
     for (size_t i = 0; i < change.new_bytes_vec.size(); ++i) {
       memory_controller_.WriteByte(change.address + i, change.new_bytes_vec[i]);
     }
   }
 
+  // Update PC and other variables.
   program_counter_ = next.new_pc;
   instructions_retired_++;
   cycle_s_++;
+  // Dump state.
   DumpRegisters(globals::registers_dump_file_path, registers_);
   DumpState(globals::vm_state_dump_file_path);
   std::cout << "Program Counter: " << program_counter_ << std::endl;
+  // Push the state to undo stack.
   undo_stack_.push(next);
 
 }
 
+// Reset the VM.
 void RVSSVM::Reset() {
+  // Reset all variables to 0.
   program_counter_ = 0;
   instructions_retired_ = 0;
   cycle_s_ = 0;

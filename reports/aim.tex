@@ -1,7 +1,7 @@
-\documentclass{article}
+\documentclass{report}
 \usepackage{float}
 
-\author{Devansh Tripathi}
+\author{Devansh Tripathi - CS24BTECH11022}
 \title{CS2323: Extending the RISC-V Simulator to Support Pipelining and Hazard Handling}
 \date{}
 
@@ -11,19 +11,19 @@
 \tableofcontents
 \newpage
 \section{Objective}
-To enhance the existing single-cycle RISC-V simulator by implementing an instruction pipeline (IF, ID, EX, MEM, WB) adn supporting data, control, and structural hazard handling mechanisms.
+To enhance the existing single-cycle RISC-V simulator by implementing an instruction pipeline (IF, ID, EX, MEM, WB) and supporting data and control hazard handling mechanisms.
 
 The goal is to demonstrate the impact of pipelining on performance and compare various pipeline configurations.
 
 \section{Motivation}
-The current in-house simulator executes one instruction per cycle (single-cycle). However, this does not reflect the behaviour of real processors nowadays.
+The current in-house simulator executes one instruction per cycle (single-cycle), which leads to higher cyle counts. This makes it inefficient and does not reflect the behaviour of current processors.
 
 Pipelining is an architectural optimization that improves the cycle count by overlapping multiple instructions.
 
 This project aims to modify the current simulator by introducing configurable pipelining functionality to it, which can demonstrate:
 \begin{itemize}
     \item Pipeline performance improvements.
-    \item Differetn types of hazards and their effects.
+    \item Different types of hazards and their effects.
     \item The impact of hazard mitigation techniques like forwarding and branch prediction.
 \end{itemize}
 
@@ -52,9 +52,47 @@ These modes can be toggled with a configuration file or a command line flag.
     \end{itemize}
 
     \item \textbf{Hazard Handling}
-    
+    \begin{itemize}
+        \item Detect data hazards, implement stall insertion, data forwarding logic.
+        \item Detect branch instructions and manage flushing and stalling, add static and dynamic branch prediction.
+    \end{itemize}
+
+    \item \textbf{Performance Evaluation}
+    \begin{itemize}
+        \item Log cycle counts, number of stalls, correctness.
+        \item Compare across configurations.
+    \end{itemize}    
 \end{enumerate}
 
 \section{Testing and Validation}
+\begin{itemize}
+    \item \textbf{Benchmark Programs}
+    \begin{itemize}
+        \item Simple arithmetic
+        \item Data hazard prone programs
+        \item Branch-heavy programs
+        \item Memory intensive programs
+    \end{itemize}
+
+    \item Each of the above will be run across all pipeline modes.
+    
+    \item Results will be logged as:
+    \begin{itemize}
+        \item Execution cycles
+        \item Number of stalls
+        \item Correctness
+    \end{itemize}
+\end{itemize}
+
 \section{Deliverables}
+\begin{itemize}
+    \item \textbf{Code}: Enhanced simulator source code with pipelining and hazard handling logic.
+    \item \textbf{Documentation}: Design report with benchmark program results and comparison.
+    \item \textbf{Benchmark programs}: Test programs.
+\end{itemize}
+
+\section{Team Members}
+\begin{itemize}
+    \item Devansh Tripathi - CS24BTECH11022
+\end{itemize}
 \end{document}

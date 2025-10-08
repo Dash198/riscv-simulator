@@ -15,10 +15,11 @@ using instruction_set::get_instr_encoding;
 
 
 
-
+// Determine the control values for a given instruction.
 void RVSSControlUnit::SetControlSignals(uint32_t instruction) {
+  // Get the opcode of the instruction.
   uint8_t opcode = instruction & 0b1111111;
-
+    // Different available control values.
   alu_src_ = mem_to_reg_ = reg_write_ = mem_read_ = mem_write_ = branch_ = false;
   alu_op_ = false;
 
@@ -115,19 +116,22 @@ void RVSSControlUnit::SetControlSignals(uint32_t instruction) {
     
 }
 
+// Determine the operation type for the ALU.
 alu::AluOp RVSSControlUnit::GetAluSignal(uint32_t instruction, bool ALUOp) {
     (void)ALUOp; // Suppress unused variable warning
     // DONT UNCOMMENT THIS WITHOUT SUPPORTING ALUOP IN CONTROL SIGNAL SETTING
     // if (!AluOp) {
     //     return alu::AluOp::kNone;
     // }
+    // Get the opcode, funct3, funct7, funct5, funct2 values.
     uint8_t opcode = instruction & 0b1111111; 
     uint8_t funct3 = (instruction >> 12) & 0b111;
     uint8_t funct7 = (instruction >> 25) & 0b1111111;
     uint8_t funct5 = (instruction >> 20) & 0b11111;
     uint8_t funct2 = (instruction >> 25) & 0b11;
     // uint8_t funct6 = (instruction >> 26) & 0b111111;
-
+    
+    // Match the opcode and return the operation type.
     switch (opcode)
     {
     case 0b0110011: {// R-Type

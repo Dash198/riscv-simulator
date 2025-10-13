@@ -18,6 +18,8 @@
 #include <algorithm>
 #include <sstream>
 
+
+// Read from a memory address.
 uint8_t Memory::Read(uint64_t address) {
   if (address >= memory_size_) {
     throw std::out_of_range("Memory address out of range: " + std::to_string(address));
@@ -30,6 +32,7 @@ uint8_t Memory::Read(uint64_t address) {
   return blocks_[block_index].data[offset];
 }
 
+// Write to a memory address.
 void Memory::Write(uint64_t address, uint8_t value) {
   if (address >= memory_size_) {
     throw std::out_of_range(std::string("Memory address out of range: ") + std::to_string(address));
@@ -40,24 +43,29 @@ void Memory::Write(uint64_t address, uint8_t value) {
   blocks_[block_index].data[offset] = value;
 }
 
+// Get block index.
 uint64_t Memory::GetBlockIndex(uint64_t address) const {
   return address/block_size_;
 }
 
+// Get bloack offset.
 uint64_t Memory::GetBlockOffset(uint64_t address) const {
   return address%block_size_;
 }
 
+// Check if the given block is present.
 bool Memory::IsBlockPresent(uint64_t block_index) const {
   return blocks_.find(block_index)!=blocks_.end();
 }
 
+// Make sure the block exists.
 void Memory::EnsureBlockExists(uint64_t block_index) {
   if (blocks_.find(block_index)==blocks_.end()) {
     blocks_.emplace(block_index, MemoryBlock());
   }
 }
 
+// Read a generic value from the address.
 template<typename T>
 T Memory::ReadGeneric(uint64_t address) {
   T value = 0;
@@ -67,6 +75,7 @@ T Memory::ReadGeneric(uint64_t address) {
   return value;
 }
 
+// Write a generic value to an address.
 template<typename T>
 void Memory::WriteGeneric(uint64_t address, T value) {
   for (size_t i = 0; i < sizeof(T); ++i) {
@@ -74,6 +83,7 @@ void Memory::WriteGeneric(uint64_t address, T value) {
   }
 }
 
+// Read a single byte.
 uint8_t Memory::ReadByte(uint64_t address) {
   if (address >= memory_size_) {
     throw std::out_of_range(std::string("Memory address out of range: ") + std::to_string(address));
@@ -81,6 +91,7 @@ uint8_t Memory::ReadByte(uint64_t address) {
   return Read(address);
 }
 
+// Read a half word.
 uint16_t Memory::ReadHalfWord(uint64_t address) {
   if (address >= memory_size_ - 1) {
     throw std::out_of_range(std::string("Memory address out of range: ") + std::to_string(address));
@@ -88,6 +99,7 @@ uint16_t Memory::ReadHalfWord(uint64_t address) {
   return ReadGeneric<uint16_t>(address);
 }
 
+// Read a word.
 uint32_t Memory::ReadWord(uint64_t address) {
   if (address >= memory_size_ - 3) {
     throw std::out_of_range(std::string("Memory address out of range: ") + std::to_string(address));
@@ -95,6 +107,7 @@ uint32_t Memory::ReadWord(uint64_t address) {
   return ReadGeneric<uint32_t>(address);
 }
 
+// Read a doubleword.
 uint64_t Memory::ReadDoubleWord(uint64_t address) {
   if (address >= memory_size_ - 7) {
     throw std::out_of_range(std::string("Memory address out of range: ") + std::to_string(address));
@@ -102,6 +115,7 @@ uint64_t Memory::ReadDoubleWord(uint64_t address) {
   return ReadGeneric<uint64_t>(address);
 }
 
+// Read from a floating point reg.
 float Memory::ReadFloat(uint64_t address) {
   if (address >= memory_size_ - (sizeof(float) - 1)) {
     throw std::out_of_range(std::string("Memory address out of range: ") + std::to_string(address));;
@@ -115,6 +129,7 @@ float Memory::ReadFloat(uint64_t address) {
   return result;
 }
 
+// Read a double value.
 double Memory::ReadDouble(uint64_t address) {
   if (address >= memory_size_ - (sizeof(double) - 1)) {
     throw std::out_of_range(std::string("Memory address out of range: ") + std::to_string(address));
@@ -128,6 +143,7 @@ double Memory::ReadDouble(uint64_t address) {
   return result;
 }
 
+// Write a byte.
 void Memory::WriteByte(uint64_t address, uint8_t value) {
   if (address >= memory_size_) {
     throw std::out_of_range(std::string("Memory address out of range: ") + std::to_string(address));
@@ -135,6 +151,7 @@ void Memory::WriteByte(uint64_t address, uint8_t value) {
   Write(address, value);
 }
 
+// Write a halfword.
 void Memory::WriteHalfWord(uint64_t address, uint16_t value) {
   if (address >= memory_size_ - 1) {
     throw std::out_of_range(std::string("Memory address out of range: ") + std::to_string(address));
@@ -142,6 +159,7 @@ void Memory::WriteHalfWord(uint64_t address, uint16_t value) {
   WriteGeneric<uint16_t>(address, value);
 }
 
+// Write a word.
 void Memory::WriteWord(uint64_t address, uint32_t value) {
   if (address >= memory_size_ - 3) {
     throw std::out_of_range(std::string("Memory address out of range: ") + std::to_string(address));
@@ -149,6 +167,7 @@ void Memory::WriteWord(uint64_t address, uint32_t value) {
   WriteGeneric<uint32_t>(address, value);
 }
 
+// Write a doubleword.
 void Memory::WriteDoubleWord(uint64_t address, uint64_t value) {
   if (address >= memory_size_ - 7) {
     throw std::out_of_range(std::string("Memory address out of range: ") + std::to_string(address));
@@ -156,6 +175,7 @@ void Memory::WriteDoubleWord(uint64_t address, uint64_t value) {
   WriteGeneric<uint64_t>(address, value);
 }
 
+// Write a float.
 void Memory::WriteFloat(uint64_t address, float value) {
   if (address >= memory_size_ - (sizeof(float) - 1)) {
     throw std::out_of_range(std::string("Memory address out of range: ") + std::to_string(address));
@@ -167,6 +187,7 @@ void Memory::WriteFloat(uint64_t address, float value) {
   }
 }
 
+// Write a double.
 void Memory::WriteDouble(uint64_t address, double value) {
   if (address >= memory_size_ - (sizeof(double) - 1)) {
     throw std::out_of_range(std::string("Memory address out of range: ") + std::to_string(address));
@@ -178,6 +199,7 @@ void Memory::WriteDouble(uint64_t address, double value) {
   }
 }
 
+// Print the memory.
 void Memory::PrintMemory(const uint64_t address, unsigned int rows) {
   constexpr size_t bytes_per_row = 8; // One row equals 64 bytes
   std::cout << "Memory Dump at Address: 0x" << std::hex << address << std::dec << "\n";
@@ -202,6 +224,7 @@ void Memory::PrintMemory(const uint64_t address, unsigned int rows) {
   std::cout << "-----------------------------------------------------------------\n";
 }
 
+// Dump the memory state.
 void Memory::DumpMemory(std::vector<std::string> args) {
     std::ofstream file(globals::memory_dump_file_path);
     if (!file.is_open()) {
@@ -246,6 +269,7 @@ void Memory::DumpMemory(std::vector<std::string> args) {
 
 }
 
+// Get a memory point.
 void Memory::GetMemoryPoint(std::string addr_str) {
   uint64_t address = std::stoull(addr_str, nullptr, 16);
   if (address >= memory_size_ - 7) {
@@ -268,7 +292,7 @@ void Memory::GetMemoryPoint(std::string addr_str) {
   
 }
 
-
+// Print the memory usage.
 void Memory::printMemoryUsage() const {
   std::cout << "Memory Usage Report:\n";
   std::cout << "---------------------\n";

@@ -8,6 +8,7 @@
 #define REGISTERS_H
 
 #include <array>
+#include <pthread.h>
 #include <vector>
 #include <unordered_set>
 #include <unordered_map>
@@ -17,6 +18,37 @@
 /**
  * @brief Represents a register file containing integer, floating-point, and vector registers.
  */
+
+struct IF_ID_REG{
+  uint32_t instr;
+  uint64_t pc;
+};
+
+struct ID_EX_REG{
+  uint64_t pc;
+  uint64_t rs1_value;
+  uint64_t rs2_value;
+  uint8_t rd;
+  uint32_t imm;
+  
+  uint64_t control_signals_1;
+  uint64_t control_signals_2;
+};
+
+struct EX_MEM_REG{
+  uint64_t alu_result;
+  uint64_t rs2_value;
+  uint8_t rd;
+  uint32_t control_signals;
+};
+
+struct MEM_WB_REG{
+  uint64_t alu_result;
+  uint64_t mem_data;
+  uint8_t rd;
+  uint32_t control_signals;
+};
+
 class RegisterFile {
  private:
   static constexpr size_t NUM_GPR = 32; ///< Number of General-Purpose Registers (GPR).
@@ -38,7 +70,7 @@ class RegisterFile {
     INTEGER,         ///< General-purpose integer register.
     FLOATING_POINT,  ///< Floating-point register.
     VECTOR,          ///< Vector register.
-    CSR              ///< Control and Status Register (CSR).
+    CSR             ///< Control and Status Register (CSR).
   };
 
   RegisterFile();

@@ -14,6 +14,7 @@
 #include <cctype>
 #include <cstdint>
 #include <iostream>
+#include <iterator>
 #include <tuple>
 #include <stack>  
 #include <algorithm>
@@ -43,9 +44,49 @@ void RVSSVM::Fetch() {
   UpdateProgramCounter(4);
 }
 
+// Execute the IF stage of the pipeline.
+// Fetch the next insturction and send it with PC to the IF_ID register.
+void RVSSM::IF(){
+  IF_ID_REG.instruction = memory_controller_.ReadWord(program_counter_);
+  IF_ID_REG.pc = program_counter_;
+  UpdateProgramCounter(4);
+
+}
+
 // Decode the current instruction (ID stage).
 void RVSSVM::Decode() {
   control_unit_.SetControlSignals(current_instruction_);
+}
+
+// Execute the ID stage for the pipeline.
+// Find out the register valyes, the immediate and the required contorl signals.
+// Store them in the ID_EX register.
+void RVSSVM::ID(){
+  // Pass on the PC to the next reg.
+  ID_EX_REG.pc = ID_ID_REG.pc;
+  
+  // Find rs1 and rs2.
+  uint64_t current_instruction = IF_ID_REG.instruction;
+  uint8_t rs1 = (current_instruction >> 15) & 0b11111;
+  uint8_t rs2 = (current_instruction >> 20) & 0b11111;
+
+  // Assign their values.
+  ID_EX_REG.imm = ImmGenerator(current_instruction);
+  ID_EX_REG.rs1_value = registers_.ReadGpr(rs1);
+  ID_EX_REG.rs2_value = registers_.ReadGpr(rs2);
+
+  // Find rd.
+  ID_EX_REG.rd = (current_instruction >> 7) & 0b11111;
+
+  // Set the control signals.
+  control_unit_.SetControlSignals(current_instruction);
+  ID_EX_REG.alu_src = control_unit_.GetAluSrc();
+  ID_EX_REG.mem_to_reg = control_unit_.GetMemToReg();
+  ID_EX_REG.reg_write = control_unit_.GetRegWrite();
+  ID_EX_REG.mem_read = control_unit_.GetMemRead();
+  ID_EX_REG.mem_write = control_unit_.GetMemWrite();
+  ID_EX_REG.branch = control_unit_.GetBranch();
+  ID_EX_REG.alu_op = control_unit_.GetAluOp();
 }
 
 // Execute the current instruction (EX stage).
@@ -448,6 +489,22 @@ void RVSSVM::HandleSyscall() {
   }
 }
 
+// Execute the EX stage of the pipeline.
+// handle the operation, perform ALU operations and then write the values to the
+// EX_MEM register.
+void RVSSvm::EX(){
+  // Pass on the values that do not change.
+  EX_MEM_REG.rs2_value = ID_EX_REG.rs2_value; // load/store.
+  EX_MEM_REG.rd = ID_EX_REG.rd;
+  EX_MEM_REG.mem_to_reg = ID_EX_REG.mem_to_reg;
+  EX_MEM_REG.reg_write = ID_EX_REG.reg_write;
+  EX_MEM_REG.mem_read = ID_EX_REG.mem_read;
+  EX_MEM_REG.mem_write = ID_EX_REG.mem_write;
+  EX_MEM_REG.branch = ID_EX_REG.branch;
+
+  // Do the required operations.
+}
+
 // Write to memory (MEM stage).
 void RVSSVM::WriteMemory() {
   // Get the opcode, rs2 and funct3 of the instruction.
@@ -634,6 +691,8 @@ void RVSSVM::WriteMemoryDouble() {
     current_delta_.memory_changes.push_back({addr, old_bytes_vec, new_bytes_vec});
   }
 }
+
+void RVSSVM::MEM(){}
 
 // Write back to register file (WB stage).
 void RVSSVM::WriteBack() {
@@ -886,6 +945,8 @@ void RVSSVM::WriteBackCsr() {
   }
 
 }
+
+void RVSSVM::WB(){}
 
 // RUN.
 void RVSSVM::Run() {

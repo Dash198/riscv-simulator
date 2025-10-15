@@ -19,12 +19,12 @@
  * @brief Represents a register file containing integer, floating-point, and vector registers.
  */
 
-struct IF_ID_REG{
+struct IF_ID_REGISTER{
   uint32_t instr;
   uint64_t pc;
 };
 
-struct ID_EX_REG{
+struct ID_EX_REGISTER{
   uint64_t pc;
   uint64_t rs1_value;
   uint64_t rs2_value;
@@ -35,14 +35,14 @@ struct ID_EX_REG{
   uint64_t control_signals_2;
 };
 
-struct EX_MEM_REG{
+struct EX_MEM_REGISTER{
   uint64_t alu_result;
   uint64_t rs2_value;
   uint8_t rd;
   uint32_t control_signals;
 };
 
-struct MEM_WB_REG{
+struct MEM_WB_REGISTER{
   uint64_t alu_result;
   uint64_t mem_data;
   uint8_t rd;
@@ -72,6 +72,12 @@ class RegisterFile {
     VECTOR,          ///< Vector register.
     CSR             ///< Control and Status Register (CSR).
   };
+
+  // Declare the pipeline registers.
+  static IF_ID_REGISTER IF_ID_REG;
+  static ID_EX_REGISTER ID_EX_REG;
+  static EX_MEM_REGISTER EX_MEM_REG;
+  static MEM_WB_REGISTER MEM_WB_REG;
 
   RegisterFile();
 

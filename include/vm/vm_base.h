@@ -32,6 +32,48 @@ enum SyscallCode {
     SYSCALL_WRITE = 64,
 };
 
+struct IF_ID_REGISTER{
+  uint32_t instr;
+  uint64_t pc;
+};
+
+struct ID_EX_REGISTER{
+  uint64_t pc;
+  uint64_t rs1_value;
+  uint64_t rs2_value;
+  uint8_t rd;
+  int32_t imm;
+  
+  bool alu_src;
+  bool mem_to_reg;
+  bool reg_write;
+  bool mem_read;
+  bool mem_write;
+  bool branch;
+  uint8_t alu_op;
+};
+
+struct EX_MEM_REGISTER{
+  uint64_t alu_result;
+  uint64_t rs2_value;
+  uint8_t rd;
+  
+  bool mem_to_reg;
+  bool reg_write;
+  bool mem_read;
+  bool mem_write;
+  bool branch;
+};
+
+struct MEM_WB_REGISTER{
+  uint64_t alu_result;
+  uint64_t mem_data;
+  uint8_t rd;
+  uint32_t control_signals;
+
+  bool mem_to_reg;
+  bool reg_write;
+};
 
 class VmBase {
 public:
@@ -59,7 +101,11 @@ public:
     std::string output_status_;
 
     
-
+    // Declare the pipeline registers.
+    static IF_ID_REGISTER IF_ID_REG;
+    static ID_EX_REGISTER ID_EX_REG;
+    static EX_MEM_REGISTER EX_MEM_REG;
+    static MEM_WB_REGISTER MEM_WB_REG;
 
 
     MemoryController memory_controller_;

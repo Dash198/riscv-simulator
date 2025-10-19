@@ -1,0 +1,18 @@
+0000000000000000 <start>:
+   0: 00008193             addi x3, x1, 0
+   4: 100001b7             lui x3, 65536
+   8: 0081b687             fld f13, x3, 8
+   c: 0101b707             fld f14, x3, 16
+  10: 02e6f7d3             fadd.d f15, f13, f14 rm=7
+  14: 00f1bc27             fsd x3, f15, 24
+  18: c00578d3             fcvt.w.s x17, f10 rm=7
+  1c: c01578d3             fcvt.wu.s x17, f10 rm=7
+  20: d00578d3             fcvt.s.w f17, x10 rm=7
+  24: 00002503             lw x10, x0, 0
+  28: a020a553             feq.s x10, f1, f2
+  2c: 00c58553             fadd.s f10, f11, f12
+  30: e0050553             fmv.x.w x10, f10 rm=7
+  34: 00a50533             add x10, x10, x10
+  38: d861f043             fmadd.s f0, f3, f6, f27 rm=7
+  3c: 00052507             flw f10, x10, 0
+  40: 00a52027             fsw x10, f10, 0

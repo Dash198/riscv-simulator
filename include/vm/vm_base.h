@@ -35,6 +35,8 @@ enum SyscallCode {
 struct IF_ID_REGISTER{
   uint32_t instr;
   uint64_t pc;
+
+  bool empty;
 };
 
 struct ID_EX_REGISTER{
@@ -51,28 +53,47 @@ struct ID_EX_REGISTER{
   bool mem_write;
   bool branch;
   uint8_t alu_op;
+  alu::AluOp alu_operation;
+
+  uint8_t opcode;
+  uint8_t funct3;
+  uint8_t funct7;
+  bool empty;
 };
 
 struct EX_MEM_REGISTER{
   uint64_t alu_result;
   uint64_t rs2_value;
   uint8_t rd;
+  uint64_t pc;
+  int32_t imm;
   
   bool mem_to_reg;
   bool reg_write;
   bool mem_read;
   bool mem_write;
   bool branch;
+
+  uint8_t opcode;
+  uint8_t funct3;
+  uint8_t funct7;
+  bool empty;
 };
 
 struct MEM_WB_REGISTER{
   uint64_t alu_result;
   uint64_t mem_data;
   uint8_t rd;
-  uint32_t control_signals;
+  int32_t imm;
+  uint64_t pc;
 
   bool mem_to_reg;
   bool reg_write;
+
+  uint8_t opcode;
+  uint8_t funct3;
+  uint8_t funct7;
+  bool empty;
 };
 
 class VmBase {

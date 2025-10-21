@@ -47,10 +47,16 @@ void RVSSVM::Fetch() {
 
 // Execute the IF stage of the pipeline.
 // Fetch the next insturction and send it with PC to the IF_ID register.
-void RVSSM::IF(){
-  IF_ID_REG.instruction = memory_controller_.ReadWord(program_counter_);
-  IF_ID_REG.pc = program_counter_;
-  UpdateProgramCounter(4);
+void RVSSVM::IF(){
+  if(program_counter_ < program_size_){
+    IF_ID_REG.instruction = memory_controller_.ReadWord(program_counter_);
+    IF_ID_REG.pc = program_counter_;
+    IF_ID_REG.empty = false;
+    UpdateProgramCounter(4);
+  }
+  else{
+    IF_ID_REG.empty = true;
+  }
 
 }
 
@@ -63,8 +69,15 @@ void RVSSVM::Decode() {
 // Find out the register valyes, the immediate and the required contorl signals.
 // Store them in the ID_EX register.
 void RVSSVM::ID(){
+  if(IF_ID_REG.empty){
+    ID_EX_REG.empty = true;
+    return;
+  }
+  if(ID_EX_REG.empty && !IF_ID_REG.empty){
+    ID_EX_REG.empty = false;
+  }
   // Pass on the PC to the next reg.
-  ID_EX_REG.pc = ID_ID_REG.pc;
+  ID_EX_REG.pc = IF_ID_REG.pc;
   
   // Find rs1 and rs2.
   uint64_t current_instruction = IF_ID_REG.instruction;
@@ -88,7 +101,7 @@ void RVSSVM::ID(){
   ID_EX_REG.mem_write = control_unit_.GetMemWrite();
   ID_EX_REG.branch = control_unit_.GetBranch();
   ID_EX_REG.alu_op = control_unit_.GetAluOp();
-  ID_EX_REG.alu_operation = control_unit_.GetAluSignal(current_instruction, control_unit_.GetAluOp();)
+  ID_EX_REG.alu_operation = control_unit_.GetAluSignal(current_instruction, control_unit_.GetAluOp());
 
   // Forward the instruction information.
   ID_EX_REG.opcode = current_instruction & 0b1111111;
@@ -499,7 +512,14 @@ void RVSSVM::HandleSyscall() {
 // Execute the EX stage of the pipeline.
 // handle the operation, perform ALU operations and then write the values to the
 // EX_MEM register.
-void RVSSvm::EX(){
+void RVSSVM::EX(){
+  if(ID_EX_REG.empty){
+    EX_MEM_REG.empty = true;
+    return;
+  }
+  if(EX_MEM_REG.empty && !ID_EX_REG.empty){
+    EX_MEM_REG.empty = false;
+  }
   // Pass on the values that do not change.
   EX_MEM_REG.rs2_value = ID_EX_REG.rs2_value; // load/store.
   EX_MEM_REG.rd = ID_EX_REG.rd;
@@ -529,9 +549,9 @@ void RVSSvm::EX(){
     reg2_value = static_cast<uint64_t>(static_cast<int64_t>(imm));
   }
 
-  std::tie(execution_result_, overflow) = alu::Alu::fpexecute(ID_EX_REG.alu_operation, reg1_value, reg2_value);
+  std::tie(execution_result_, overflow) = alu::Alu::execute(ID_EX_REG.alu_operation, reg1_value, reg2_value);
 
-  EX_MEM_REG.alu_result = execution_result_
+  EX_MEM_REG.alu_result = execution_result_;
 
   if (opcode==get_instr_encoding(Instruction::kauipc).opcode) { // AUIPC
     execution_result_ = static_cast<int64_t>(ID_EX_REG.pc) - 4 + (imm << 12);
@@ -726,6 +746,13 @@ void RVSSVM::WriteMemoryDouble() {
 }
 
 void RVSSVM::MEM(){
+  if(EX_MEM_REG.empty){
+    MEM_WB_REG.empty = true;
+    return;
+  }
+  if(MEM_WB_REG.empty && !EX_MEM_REG.empty){
+    MEM_WB_REG.empty = false;
+  }
   MEM_WB_REG.alu_result = EX_MEM_REG.alu_result;
   MEM_WB_REG.rd = EX_MEM_REG.rd;
   MEM_WB_REG.mem_to_reg = EX_MEM_REG.mem_to_reg;
@@ -738,7 +765,7 @@ void RVSSVM::MEM(){
   uint8_t funct3 = EX_MEM_REG.funct3;
 
   if(EX_MEM_REG.branch){
-    uint64_t pc = EX_MEM_REG.pc
+    uint64_t pc = EX_MEM_REG.pc;
     if (opcode==get_instr_encoding(Instruction::kjalr).opcode ||
         opcode==get_instr_encoding(Instruction::kjal).opcode) {
 
@@ -752,9 +779,10 @@ void RVSSVM::MEM(){
         UpdateProgramCounter(-program_counter_ + (execution_result_));
       // For jal, jump by the immediate offset.
       } else if (opcode==get_instr_encoding(Instruction::kjal).opcode) {
-        UpdateProgramCounter(imm);
+        UpdateProgramCounter(EX_MEM_REG.imm);
       }
   }
+}
 
   if(opcode == 0b1110011 && funct3 == 0b000){
     return;
@@ -795,58 +823,58 @@ void RVSSVM::MEM(){
       }
     }
 
-    MEM_WB_REG.mem_result = memory_result_
+    MEM_WB_REG.alu_result = memory_result_;
   }
 
   if(EX_MEM_REG.mem_write){
     uint64_t target = EX_MEM_REG.rs2_value;
     switch(funct3){
       case 0b000: {
-        old_bytes_vec.push_back(memory_controller_.ReadByte(addr));
+        //old_bytes_vec.push_back(memory_controller_.ReadByte(addr));
         memory_controller_.WriteByte(addr, target & 0xFF);
-        new_bytes_vec.push_back(memory_controller_.ReadByte(addr));
+        //new_bytes_vec.push_back(memory_controller_.ReadByte(addr));
         break;
       }
       case 0b001: {
         for(size_t i = 0; i < 2 ; ++i){
-          old_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
+          //old_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
         }
         memory_controller_.WriteHalfWord(addr, target & 0xFFFF);
         for(size_t i=0; i<2; i++){
-          new_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
+          //new_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
         }
         break;
       }
       case 0b010: {
         for(size_t i = 0; i < 4 ; ++i){
-          old_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
+          //old_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
         }
         memory_controller_.WriteWord(addr, target & 0xFFFFFFFF);
         for(size_t i=0; i<4; i++){
-          new_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
+          //new_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
         }
         break;
       }
       case 0b011: {
         for(size_t i = 0; i < 8 ; ++i){
-          old_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
+          //old_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
         }
         memory_controller_.WriteDoubleWord(addr, target & 0xFFFFFFFFFFFFFFFF);
         for(size_t i=0; i<8; i++){
-          new_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
+          //new_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
         }
         break;
       }
     }
   }
 
-  if(old_bytes_vec != new_bytes_vec){
-    current_delta_.memory_changes.push_back({
-      addr,
-      old_bytes_vec,
-      new_bytes_vec
-    });
-  }
+  // if(old_bytes_vec != new_bytes_vec){
+  //   current_delta_.memory_changes.push_back({
+  //     addr,
+  //     old_bytes_vec,
+  //     new_bytes_vec
+  //   });
+  // }
 }
 
 // Write back to register file (WB stage).
@@ -1102,6 +1130,8 @@ void RVSSVM::WriteBackCsr() {
 }
 
 void RVSSVM::WB(){
+  if(MEM_WB_REG.empty)   return;
+
   uint8_t opcode = MEM_WB_REG.opcode;
   uint8_t funct3 = MEM_WB_REG.funct3;
   uint8_t rd = MEM_WB_REG.rd;
@@ -1127,7 +1157,7 @@ void RVSSVM::WB(){
         break;
       }
       case get_instr_encoding(Instruction::kLoadType).opcode: {
-        registers_.WriteGpr(rd, MEM_WB_REG.mem_result);
+        registers_.WriteGpr(rd, MEM_WB_REG.alu_result);
         break;
       }
       case get_instr_encoding(Instruction::kjalr).opcode:
@@ -1143,10 +1173,10 @@ void RVSSVM::WB(){
     }
   }
 
-  uint64_t new_reg = registers_.ReadGpr(rd);
-  if(old_reg!=new_reg){
-    current_delta_.register_changes.push_back({reg_index, reg_type, old_type, new_reg});
-  }
+  // uint64_t new_reg = registers_.ReadGpr(rd);
+  // if(old_reg!=new_reg){
+  //   current_delta_.register_changes.push_back({reg_index, reg_type, old_type, new_reg});
+  // }
 }
 
 // RUN.
@@ -1155,30 +1185,24 @@ void RVSSVM::Run() {
   ClearStop();
   // Number of instructions executed.
   uint64_t instruction_executed = 0;
-
   // Keep going as long as we don't want to stop or PC exceeds the max program size.
-  while (!stop_requested_ && program_counter_ < program_size_) {
+  do {
     // Check if max instructions are exceeded.
-    if (instruction_executed > vm_config::config.getInstructionExecutionLimit())
+    if (stop_requested_ || instruction_executed > vm_config::config.getInstructionExecutionLimit())
       break;
 
-    // Fetch the instruction.
-    Fetch();
-    // Decode the instruction.
-    Decode();
-    // Execute the operation.
-    Execute();
-    // Access memory.
-    WriteMemory();
-    // Write to register file.
-    WriteBack();
+    WB();
+    MEM();
+    EX();
+    ID();
+    IF();
     // Increment the insturction counters and cycles.
     instructions_retired_++;
     instruction_executed++;
     cycle_s_++;
     // Log the PC.
     std::cout << "Program Counter: " << program_counter_ << std::endl;
-  }
+  } while(!(IF_ID_REG.empty && ID_EX_REG.empty && EX_MEM_REG.empty && MEM_WB_REG.empty));
   if (program_counter_ >= program_size_) {
     std::cout << "VM_PROGRAM_END" << std::endl;
     output_status_ = "VM_PROGRAM_END";

@@ -1,0 +1,28 @@
+\documentclass{report}
+\usepackage{float}
+
+\title{CS2323: Initial Implementation Report}
+\author{Devansh Tripathi - CS24BTECH11022}
+\date{}
+
+\begin{document}
+\maketitle
+\newpage
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+This project adds 5-stage pipelining functionality to the in-house RISC-V processor simulator.
+
+The simulator can be configured to run in different modes, such as enabling single-stage or multi-stage, with or without hazard detection, and so on.
+
+This can be used to demonstate how pipelining works in real world simulators.
+
+\section{Implementation Status}
+To the date of writing this report, the following has been implemented:
+\begin{itemize}
+    \item The four pipeline registers - IF/ID, ID/EX, EX/MEM, MEM/WB have been implemented as \texttt{struct}s in C++, separate from the register file.
+    \item The five pipeline stages have been added, refactoring the code from the single cycle simulator so as to take inputs from the pipeline registers.
+\end{itemize}
+\end{document}

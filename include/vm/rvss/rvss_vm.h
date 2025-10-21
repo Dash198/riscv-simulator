@@ -143,6 +143,12 @@ class RVSSVM : public VmBase {
   void WriteBackDouble();
   void WriteBackCsr();
 
+  void IF();
+  void ID();
+  void EX();
+  void MEM();
+  void WB();
+
   RVSSVM();
   ~RVSSVM();
 

@@ -33,7 +33,7 @@ enum SyscallCode {
 };
 
 struct IF_ID_REGISTER{
-  uint32_t instr;
+  uint32_t instruction;
   uint64_t pc;
 
   bool empty;

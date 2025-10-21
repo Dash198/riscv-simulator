@@ -18,6 +18,23 @@
 #include <cstring>
 #include <thread>
 
+// Correct syntax: type ClassName::member = initializer;
+
+IF_ID_REGISTER VmBase::IF_ID_REG{0, 0, true};
+
+ID_EX_REGISTER VmBase::ID_EX_REG{
+    0, 0, 0, 0, 0, false, false, false, false, false, false,
+    0, alu::AluOp::kAdd, 0, 0, 0, true
+};
+
+EX_MEM_REGISTER VmBase::EX_MEM_REG{
+    0, 0, 0, 0, 0, false, false, false, false, false, 0, 0, 0, true
+};
+
+MEM_WB_REGISTER VmBase::MEM_WB_REG{
+    0, 0, 0, 0, 0, false, false, 0, 0, 0, true
+};
+
 
 void VmBase::LoadProgram(const AssembledProgram &program) {
   program_ = program;

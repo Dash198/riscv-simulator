@@ -51,11 +51,11 @@ void RVSSVM::IF(){
   if(program_counter_ < program_size_){
     IF_ID_REG.instruction = memory_controller_.ReadWord(program_counter_);
     IF_ID_REG.pc = program_counter_;
-    IF_ID_REG.empty = false;
+    IF_ID_REG.isEmpty = false;
     UpdateProgramCounter(4);
   }
   else{
-    IF_ID_REG.empty = true;
+    IF_ID_REG.isEmpty = true;
   }
 
 }
@@ -69,25 +69,20 @@ void RVSSVM::Decode() {
 // Find out the register valyes, the immediate and the required contorl signals.
 // Store them in the ID_EX register.
 void RVSSVM::ID(){
-  if(IF_ID_REG.empty){
-    ID_EX_REG.empty = true;
+  if(IF_ID_REG.isEmpty){
+    ID_EX_REG.isEmpty = true;
     return;
   }
-  if(ID_EX_REG.empty && !IF_ID_REG.empty){
-    ID_EX_REG.empty = false;
+  if(ID_EX_REG.isEmpty && !IF_ID_REG.isEmpty){
+    ID_EX_REG.isEmpty = false;
   }
   // Pass on the PC to the next reg.
   ID_EX_REG.pc = IF_ID_REG.pc;
   
-  // Find rs1 and rs2.
   uint64_t current_instruction = IF_ID_REG.instruction;
-  uint8_t rs1 = (current_instruction >> 15) & 0b11111;
-  uint8_t rs2 = (current_instruction >> 20) & 0b11111;
 
   // Assign their values.
   ID_EX_REG.imm = ImmGenerator(current_instruction);
-  ID_EX_REG.rs1_value = registers_.ReadGpr(rs1);
-  ID_EX_REG.rs2_value = registers_.ReadGpr(rs2);
 
   // Find rd.
   ID_EX_REG.rd = (current_instruction >> 7) & 0b11111;
@@ -102,12 +97,49 @@ void RVSSVM::ID(){
   ID_EX_REG.branch = control_unit_.GetBranch();
   ID_EX_REG.alu_op = control_unit_.GetAluOp();
   ID_EX_REG.alu_operation = control_unit_.GetAluSignal(current_instruction, control_unit_.GetAluOp());
+  ID_EX_REG.isFloat = false;
+  ID_EX_REG.isDouble = false;
 
   // Forward the instruction information.
   ID_EX_REG.opcode = current_instruction & 0b1111111;
   ID_EX_REG.funct3 = (current_instruction >> 12) & 0b111;
   ID_EX_REG.funct7 = (current_instruction >> 25) & 0b1111111;
+
+  if(instruction_set::isFInstruction(current_instruction)){
+    ID_EX_REG.isFloat = true;
+    IDFP();
+    return;
+  }
+  if(instruction_set::isDInstruction(current_instruction)){
+    ID_EX_REG.isDouble = true;
+    IDFP();
+    return;
+  }
+  // Find rs1 and rs2.
+  uint8_t rs1 = (current_instruction >> 15) & 0b11111;
+  uint8_t rs2 = (current_instruction >> 20) & 0b11111;
+  ID_EX_REG.rs1_value = registers_.ReadGpr(rs1);
+  ID_EX_REG.rs2_value = registers_.ReadGpr(rs2);
 }
+
+void RVSSVM::IDFP(){
+  uint64_t current_instruction = IF_ID_REG.instruction;
+  uint8_t rs1 = (current_instruction >> 15) & 0b11111;
+  uint8_t rs2 = (current_instruction >> 20) & 0b11111;
+  uint8_t rs3 = (current_instruction >> 27) & 0b11111;
+
+  uint8_t funct7 = ID_EX_REG.funct7;
+  ID_EX_REG.rs1_value = registers_.ReadFpr(rs1);
+  if (funct7==0b1101000 || funct7==0b1111000 || funct7==0b1101001 || funct7==0b1111001 || opcode==0b0000111 || opcode==0b0100111) {
+    reg1_value = registers_.ReadGpr(rs1);
+  }
+  if(ID_EX_REG.funct3 == 0b111){
+    ID_EX_REG.rm = registers_.ReadCsr(0x002); 
+  }
+  ID_EX_REG.rs2_value = registers_.ReadFpr(rs2);
+  ID_EX_REG.rs3_value = registers_.ReadFpr(rs3);
+}
+
 
 // Execute the current instruction (EX stage).
 void RVSSVM::Execute() {
@@ -513,12 +545,12 @@ void RVSSVM::HandleSyscall() {
 // handle the operation, perform ALU operations and then write the values to the
 // EX_MEM register.
 void RVSSVM::EX(){
-  if(ID_EX_REG.empty){
-    EX_MEM_REG.empty = true;
+  if(ID_EX_REG.isEmpty){
+    EX_MEM_REG.isEmpty = true;
     return;
   }
-  if(EX_MEM_REG.empty && !ID_EX_REG.empty){
-    EX_MEM_REG.empty = false;
+  if(EX_MEM_REG.isEmpty && !ID_EX_REG.isEmpty){
+    EX_MEM_REG.isEmpty = false;
   }
   // Pass on the values that do not change.
   EX_MEM_REG.rs2_value = ID_EX_REG.rs2_value; // load/store.
@@ -532,6 +564,19 @@ void RVSSVM::EX(){
   EX_MEM_REG.funct3 = ID_EX_REG.funct3;
   EX_MEM_REG.funct7 = ID_EX_REG.funct7;
   EX_MEM_REG.imm = ID_EX_REG.imm;
+  EX_MEM_REG.isFloat = false;
+  EX_MEM_REG.isDouble = false;
+
+  if(ID_EX_REG.isFloat){
+    EX_MEM_REG.isFloat = true;
+    EXF();
+    return;
+  }
+  if(ID_EX_REG.isDouble){
+    EX_MEM_REG.isDouble = true;
+    EXD();
+    return;
+  }
 
   // Do the required operations.
   // Only considering integer registers for now.
@@ -551,11 +596,59 @@ void RVSSVM::EX(){
 
   std::tie(execution_result_, overflow) = alu::Alu::execute(ID_EX_REG.alu_operation, reg1_value, reg2_value);
 
-  EX_MEM_REG.alu_result = execution_result_;
-
   if (opcode==get_instr_encoding(Instruction::kauipc).opcode) { // AUIPC
     execution_result_ = static_cast<int64_t>(ID_EX_REG.pc) - 4 + (imm << 12);
   }
+
+  EX_MEM_REG.alu_result = execution_result_;
+}
+
+void RVSSVM::EXF(){
+  uint8_t opcode = ID_EX_REG.opcode;
+  uint8_t funct3 = ID_EX_REG.funct3;
+  uint8_t funct7 = ID_EX_REG.funt7;
+  uint8_t rm = funct3;
+
+  uint8_t fcsr_status = 0;
+
+  int32_t imm = ID_EX_REG.imm;
+
+  uint64_t reg1_value = ID_EX_REG.rs1_value;
+  uint64_t reg2_value = ID_EX_REG.rs2_value;
+  uint64_t reg3_value = ID_EX_REG.rs3_value;
+
+  if(ID_EX_MEM.alu_src){
+    reg2_value = static_cast<uint64_t>(static_cast<int64_t>(imm));
+  }
+
+  std::tie(execution_result_, fcsr_status) = alu::Alu::fpexecute(ID_EX_REG.alu_operation, reg1_value, reg2_value, reg3_value, rm);
+  EX_MEM_REG.alu_result = execution_result_;
+  EX_MEM_REG.fcsr_status = fcsr_status;
+  registers_.WriteCsr(0x003, fcsr_status);
+}
+
+void RVSSVM::EXD(){
+  uint8_t opcode = ID_EX_REG.opcode;
+  uint8_t funct3 = ID_EX_REG.funct3;
+  uint8_t funct7 = ID_EX_REG.funt7;
+  uint8_t rm = funct3;
+
+  uint8_t fcsr_status = 0;
+
+  int32_t imm = ID_EX_REG.imm;
+
+  uint64_t reg1_value = ID_EX_REG.rs1_value;
+  uint64_t reg2_value = ID_EX_REG.rs2_value;
+  uint64_t reg3_value = ID_EX_REG.rs3_value;
+
+  if(ID_EX_MEM.alu_src){
+    reg2_value = static_cast<uint64_t>(static_cast<int64_t>(imm));
+  }
+
+  std::tie(execution_result_, fcsr_status) = alu::Alu::dfpexecute(ID_EX_REG.alu_operation, reg1_value, reg2_value, reg3_value, rm);
+  EX_MEM_REG.alu_result = execution_result_;
+  EX_MEM_REG.fcsr_status = fcsr_status;
+  registers_.WriteCsr(0x003, fcsr_status);
 }
 
 // Write to memory (MEM stage).
@@ -746,13 +839,14 @@ void RVSSVM::WriteMemoryDouble() {
 }
 
 void RVSSVM::MEM(){
-  if(EX_MEM_REG.empty){
-    MEM_WB_REG.empty = true;
+  if(EX_MEM_REG.isEmpty){
+    MEM_WB_REG.isEmpty = true;
     return;
   }
-  if(MEM_WB_REG.empty && !EX_MEM_REG.empty){
-    MEM_WB_REG.empty = false;
+  if(MEM_WB_REG.isEmpty && !EX_MEM_REG.isEmpty){
+    MEM_WB_REG.isEmpty = false;
   }
+
   MEM_WB_REG.alu_result = EX_MEM_REG.alu_result;
   MEM_WB_REG.rd = EX_MEM_REG.rd;
   MEM_WB_REG.mem_to_reg = EX_MEM_REG.mem_to_reg;
@@ -760,6 +854,19 @@ void RVSSVM::MEM(){
   MEM_WB_REG.opcode = EX_MEM_REG.opcode;
   MEM_WB_REG.funct3 = EX_MEM_REG.funct3;
   MEM_WB_REG.imm = EX_MEM_REG.imm;
+  MEM_WB_REG.isFloat = false;
+  MEM_WB_REG.isDouble = false;
+
+  if(EX_MEM_REG.isFloat){
+    MEM_WB_REG.isFloat = true;
+    MEMF();
+    return;
+  }
+  if(EX_MEM_REG.isDouble){
+    MEM_WB_REG.isDouble = true;
+    MEMD();
+    return;
+  }
 
   uint8_t opcode = EX_MEM_REG.opcode;
   uint8_t funct3 = EX_MEM_REG.funct3;
@@ -781,8 +888,8 @@ void RVSSVM::MEM(){
       } else if (opcode==get_instr_encoding(Instruction::kjal).opcode) {
         UpdateProgramCounter(EX_MEM_REG.imm);
       }
+    }
   }
-}
 
   if(opcode == 0b1110011 && funct3 == 0b000){
     return;
@@ -790,6 +897,8 @@ void RVSSVM::MEM(){
   // Ignoring F/D instructions for now.
 
   uint64_t addr = EX_MEM_REG.alu_result;
+  std::vector<uint8_t> old_bytes_vec;
+  std::vector<uint8_t> new_bytes_vec;
 
   if(EX_MEM_REG.mem_read){
     switch(funct3){
@@ -830,51 +939,108 @@ void RVSSVM::MEM(){
     uint64_t target = EX_MEM_REG.rs2_value;
     switch(funct3){
       case 0b000: {
-        //old_bytes_vec.push_back(memory_controller_.ReadByte(addr));
+        old_bytes_vec.push_back(memory_controller_.ReadByte(addr));
         memory_controller_.WriteByte(addr, target & 0xFF);
-        //new_bytes_vec.push_back(memory_controller_.ReadByte(addr));
+        new_bytes_vec.push_back(memory_controller_.ReadByte(addr));
         break;
       }
       case 0b001: {
         for(size_t i = 0; i < 2 ; ++i){
-          //old_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
+          old_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
         }
         memory_controller_.WriteHalfWord(addr, target & 0xFFFF);
         for(size_t i=0; i<2; i++){
-          //new_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
+          new_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
         }
         break;
       }
       case 0b010: {
         for(size_t i = 0; i < 4 ; ++i){
-          //old_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
+          old_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
         }
         memory_controller_.WriteWord(addr, target & 0xFFFFFFFF);
         for(size_t i=0; i<4; i++){
-          //new_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
+          new_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
         }
         break;
       }
       case 0b011: {
         for(size_t i = 0; i < 8 ; ++i){
-          //old_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
+          old_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
         }
         memory_controller_.WriteDoubleWord(addr, target & 0xFFFFFFFFFFFFFFFF);
         for(size_t i=0; i<8; i++){
-          //new_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
+          new_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
         }
         break;
       }
     }
   }
 
-  // if(old_bytes_vec != new_bytes_vec){
-  //   current_delta_.memory_changes.push_back({
-  //     addr,
-  //     old_bytes_vec,
-  //     new_bytes_vec
-  //   });
-  // }
+  if(old_bytes_vec != new_bytes_vec){
+    current_delta_.memory_changes.push_back({
+      addr,
+      old_bytes_vec,
+      new_bytes_vec
+    });
+  }
+}
+
+void RVSSVM::MEMF(){
+
+  // flw instruction.
+  if (EX_MEM_REG.mem_read) { // FLW
+    MEM_WB_REG.alu_result = memory_controller_.ReadWord(EX_MEM_REG.alu_result);
+  }
+
+  // std::cout << "+++++ Memory result: " << memory_result_ << std::endl;
+
+  uint64_t addr = EX_MEM_REG.alu_result;
+  std::vector<uint8_t> old_bytes_vec;
+  std::vector<uint8_t> new_bytes_vec;
+
+  // Store the float into memory, similar to integer register.
+  if (EX_MEM_REG.mem_write) { // FSW
+    for (size_t i = 0; i < 4; ++i) {
+      old_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
+    }
+    uint32_t val = EX_MEM_REG.rs2_value & 0xFFFFFFFF;
+    memory_controller_.WriteWord(addr, val);
+    // new_bytes_vec.push_back(memory_controller_.ReadByte(addr));
+    for (size_t i = 0; i < 4; ++i) {
+      new_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
+    }
+  }
+
+  if (old_bytes_vec!=new_bytes_vec) {
+    current_delta_.memory_changes.push_back({addr, old_bytes_vec, new_bytes_vec});
+  }
+}
+
+void RVSSVM::MEMD(){
+
+  if (control_unit_.GetMemRead()) {// FLD
+    memory_result_ = memory_controller_.ReadDoubleWord(EX_MEM_REG.alu_result);
+  }
+
+  uint64_t addr = EX_MEM_REG.alu_result;
+  std::vector<uint8_t> old_bytes_vec;
+  std::vector<uint8_t> new_bytes_vec;
+
+  if (control_unit_.GetMemWrite()) {// FSD
+    addr = execution_result_;
+    for (size_t i = 0; i < 8; ++i) {
+      old_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
+    }
+    memory_controller_.WriteDoubleWord(addr, EX_MEM_REG.rs2_value);
+    for (size_t i = 0; i < 8; ++i) {
+      new_bytes_vec.push_back(memory_controller_.ReadByte(addr + i));
+    }
+  }
+
+  if (old_bytes_vec!=new_bytes_vec) {
+    current_delta_.memory_changes.push_back({addr, old_bytes_vec, new_bytes_vec});
+  }
 }
 
 // Write back to register file (WB stage).
@@ -1130,7 +1296,7 @@ void RVSSVM::WriteBackCsr() {
 }
 
 void RVSSVM::WB(){
-  if(MEM_WB_REG.empty)   return;
+  if(MEM_WB_REG.isEmpty)   return;
 
   uint8_t opcode = MEM_WB_REG.opcode;
   uint8_t funct3 = MEM_WB_REG.funct3;
@@ -1142,6 +1308,15 @@ void RVSSVM::WB(){
     return;
   }
   
+  if(MEM_WB_REG.isFloat){
+    WBF();
+    return;
+  }
+  if(MEM_WB_REG.isDouble){
+    WBD();
+    return;
+  }
+
   // Ignore F/D for now.
 
   uint64_t old_reg = registers_.ReadGpr(rd);
@@ -1173,10 +1348,10 @@ void RVSSVM::WB(){
     }
   }
 
-  // uint64_t new_reg = registers_.ReadGpr(rd);
-  // if(old_reg!=new_reg){
-  //   current_delta_.register_changes.push_back({reg_index, reg_type, old_type, new_reg});
-  // }
+  uint64_t new_reg = registers_.ReadGpr(rd);
+  if(old_reg!=new_reg){
+    current_delta_.register_changes.push_back({reg_index, reg_type, old_type, new_reg});
+  }
 }
 
 // RUN.
@@ -1202,7 +1377,7 @@ void RVSSVM::Run() {
     cycle_s_++;
     // Log the PC.
     std::cout << "Program Counter: " << program_counter_ << std::endl;
-  } while(!(IF_ID_REG.empty && ID_EX_REG.empty && EX_MEM_REG.empty && MEM_WB_REG.empty));
+  } while(!(IF_ID_REG.isEmpty && ID_EX_REG.isEmpty && EX_MEM_REG.isEmpty && MEM_WB_REG.isEmpty));
   if (program_counter_ >= program_size_) {
     std::cout << "VM_PROGRAM_END" << std::endl;
     output_status_ = "VM_PROGRAM_END";

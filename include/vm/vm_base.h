@@ -36,13 +36,16 @@ struct IF_ID_REGISTER{
   uint32_t instruction;
   uint64_t pc;
 
-  bool empty;
+  bool isEmpty;
+  bool isFloat;
+  bool isDouble;
 };
 
 struct ID_EX_REGISTER{
   uint64_t pc;
   uint64_t rs1_value;
   uint64_t rs2_value;
+  uint64_t rs3_value;
   uint8_t rd;
   int32_t imm;
   
@@ -58,7 +61,11 @@ struct ID_EX_REGISTER{
   uint8_t opcode;
   uint8_t funct3;
   uint8_t funct7;
-  bool empty;
+  uint8_t rm;
+
+  bool isEmpty;
+  bool isFloat;
+  bool isDouble;
 };
 
 struct EX_MEM_REGISTER{
@@ -67,6 +74,7 @@ struct EX_MEM_REGISTER{
   uint8_t rd;
   uint64_t pc;
   int32_t imm;
+  uint8_t fcsr_status;
   
   bool mem_to_reg;
   bool reg_write;
@@ -77,7 +85,10 @@ struct EX_MEM_REGISTER{
   uint8_t opcode;
   uint8_t funct3;
   uint8_t funct7;
-  bool empty;
+
+  bool isEmpty;
+  bool isFloat;
+  bool isDouble;
 };
 
 struct MEM_WB_REGISTER{
@@ -93,7 +104,8 @@ struct MEM_WB_REGISTER{
   uint8_t opcode;
   uint8_t funct3;
   uint8_t funct7;
-  bool empty;
+
+  bool isEmpty;
 };
 
 class VmBase {

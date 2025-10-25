@@ -1,14 +1,14 @@
 {
-    "program_counter": "0x0000001c",
-    "current_line": 0,
-    "current_instruction": "0xa0b50553",
-    "disassembly_line_number": 0,
-    "cycle_count": 7,
-    "instructions_retired": 7,
+    "program_counter": "0x00000000",
+    "current_line": 10,
+    "current_instruction": "0x00000000",
+    "disassembly_line_number": 2,
+    "cycle_count": 0,
+    "instructions_retired": 0,
     "cpi": 0,
     "ipc": 0,
     "stall_cycles": 0,
     "branch_mispredictions": 0,
-    "breakpoints": [],
-    "output_status": "VM_LAST_INSTRUCTION_STEPPED"
+    "breakpoints": [22, 80],
+    "output_status": "VM_PROGRAM_LOADED"
 }

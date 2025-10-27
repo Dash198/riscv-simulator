@@ -93,7 +93,7 @@ struct EX_MEM_REGISTER{
 
 struct MEM_WB_REGISTER{
   uint64_t alu_result;
-  uint64_t mem_data;
+  uint64_t mem_result;
   uint8_t rd;
   int32_t imm;
   uint64_t pc;

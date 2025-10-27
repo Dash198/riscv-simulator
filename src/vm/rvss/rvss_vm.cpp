@@ -12,6 +12,7 @@
 #include "config.h"
 
 #include <cctype>
+#include <climits>
 #include <cstdint>
 #include <iostream>
 #include <iterator>
@@ -932,7 +933,7 @@ void RVSSVM::MEM(){
       }
     }
 
-    MEM_WB_REG.alu_result = memory_result_;
+    MEM_WB_REG.mem_result = memory_result_;
   }
 
   if(EX_MEM_REG.mem_write){
@@ -1020,7 +1021,7 @@ void RVSSVM::MEMF(){
 void RVSSVM::MEMD(){
 
   if (control_unit_.GetMemRead()) {// FLD
-    memory_result_ = memory_controller_.ReadDoubleWord(EX_MEM_REG.alu_result);
+    MEM_WB_REG.alu_result = memory_controller_.ReadDoubleWord(EX_MEM_REG.alu_result);
   }
 
   uint64_t addr = EX_MEM_REG.alu_result;
@@ -1332,7 +1333,7 @@ void RVSSVM::WB(){
         break;
       }
       case get_instr_encoding(Instruction::kLoadType).opcode: {
-        registers_.WriteGpr(rd, MEM_WB_REG.alu_result);
+        registers_.WriteGpr(rd, MEM_WB_REG.mem_result);
         break;
       }
       case get_instr_encoding(Instruction::kjalr).opcode:
@@ -1351,6 +1352,83 @@ void RVSSVM::WB(){
   uint64_t new_reg = registers_.ReadGpr(rd);
   if(old_reg!=new_reg){
     current_delta_.register_changes.push_back({reg_index, reg_type, old_type, new_reg});
+  }
+}
+
+void RVSSVM::WBF(){
+  uint8_t opcode = MEM_WB_REG.opcode;
+  uint8_t funct7 = MEM_WB_REG.funct7;
+  uint8_t rd = MEM_WB_REG.rd;
+
+  uint64_t old_reg = 0;
+  unsigned int reg_index = rd;
+  unsigned int reg_type = 2;
+  uint64_t new_reg = 0;
+
+  if(MEM_WB_REG.reg_write){
+    case get_instr_encoding(Instruction::kfle_s).funct7:
+    case get_instr_encoding(Instruction::kfcvt_w_s).funct7:
+    case get_instr_encoding(Instruction::kfmv_x_w).funct7: {
+      old_reg = registers_.ReadGpr(rd);
+      registers_.WriteGpr(rd, MEM_WB_REG.alu_result);
+      new_reg = MEM_WB_REG.alu_result;
+      reg_type = 0;
+      break;
+    }
+
+    default: {
+      switch(opcode){
+        case get_instr_encoding(Instruction::kflw).opcode: {
+          old_reg = registers_ReadFpr(rd);
+          register_WriteFpr(rd, MEM_WB_REG.mem_result);
+          new_reg = MEM_WB_REG.mem_result;
+          reg_type = 2;
+          break
+        }
+
+        default: {
+          old_reg = registers_.ReadFpr(rd);
+          registers_.WriteFpr(rd, MEM_WB_REG.alu_result);
+          new_reg = MEM_WB_REG.alu_result;
+          reg_type = 2;
+          break;
+        }
+      }
+    }
+  }
+  if (old_reg!=new_reg) {
+    current_delta_.register_changes.push_back({reg_index, reg_type, old_reg, new_reg});
+  }
+}
+
+void RVSSVM::WBD(){
+  uint8_t opcode = MEM_WB_REG.opcode;
+  uint8_t funct7 = MEM_WB_REG.funct7;
+  uint8_t rd = MEM_WB_REG.rd;
+
+  uint64_t old_reg = 0;
+  unsigned int reg_index = rd;
+  unsigned int reg_type = 2;
+  uint64_t new_reg = 0;
+
+  if(MEM_WB_REG.reg_write){
+    if(funct7 == 0b1010001 || funct7 == 0b1100001 || funct7 == 0b1110001){
+      old_reg_ = registers_.ReadGpr(rd);
+      registers_.WriteGpr(rd,   MEM_WB_REG.alu_result);
+      new_reg = MEM_WB_REG.alut_result;
+      reg_type = 0;
+    }
+
+    else if(opcode == 0b0000111){
+      old_reg = registers_.ReadFpr(rd);
+      registers_.WriteFpr(rd, MEM_WB_REG.mem_result);
+      new_reg = MEM_WB_REG.mem_result;
+      reg_type = 2;
+    }
+
+    else{
+      old_reg = registers_.ReadFpr(rd)
+    }
   }
 }
 

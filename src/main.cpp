@@ -3,6 +3,7 @@
 #include "utils.h"
 #include "globals.h"
 #include "vm/rvss/rvss_vm.h"
+#include "vm/rv5s/rv5s_vm.h"
 #include "vm_runner.h"
 #include "command_handler.h"
 #include "config.h"
@@ -11,10 +12,26 @@
 #include <thread>
 #include <bitset>
 #include <regex>
+#include<fstream>
+#include<string>
 
 
 // Main function, entry point.
 int main(int argc, char *argv[]) {
+
+  std::ifstream inFile("config.ini");
+
+  if(!inFile.is_open()){
+    std::cerr << "Error openin config file!" << std::endl;
+    return 1;
+  }
+
+  std::string line;
+  std::getline(inFile, line);
+
+  int mode = line[line.length()-1] - '0';
+
+  inFile.close();
 
   // No argument case.
   if (argc <= 1) {
@@ -70,10 +87,16 @@ int main(int argc, char *argv[]) {
             // Try to assemble the program.
             AssembledProgram program = assemble(argv[i]);
 
-            // Initialise a VM for the assembled program and try to load and run ut.
-            RVSSVM vm;
-            vm.LoadProgram(program);
-            vm.Run();
+            // Initialise a VM for the assembled program and try to load and run it.
+            std::unique_ptr<VmBase> vm;
+            if(mode==1){
+              vm = std::make_unique<RV5SVM>();
+            }
+            else{
+              vm = std::make_unique<RVSSVM>();
+            }
+            vm->LoadProgram(program);
+            vm->Run();
 
             std::cout << "Program running: " << program.filename << '\n';
             return 0;

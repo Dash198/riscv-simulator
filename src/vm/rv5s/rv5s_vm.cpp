@@ -40,6 +40,74 @@ RV5SVM::RV5SVM() : VmBase() {
 // Initialise the desructor.
 RV5SVM::~RV5SVM() = default;
 
+IF_ID_REGISTER RV5SVM::IF_ID_REG{
+    0,      // instruction
+    0,      // pc
+    true,   // isEmpty
+    false,  // isFloat
+    false   // isDouble
+};
+
+ID_EX_REGISTER RV5SVM::ID_EX_REG{
+    0,      // pc
+    0,      // rs1_value
+    0,      // rs2_value
+    0,      // rs3_value
+    0,      // rd
+    0,      // imm
+    false,  // alu_src
+    false,  // mem_to_reg
+    false,  // reg_write
+    false,  // mem_read
+    false,  // mem_write
+    false,  // branch
+    0,      // alu_op
+    alu::AluOp::kAdd,  // alu_operation
+    0,      // opcode
+    0,      // funct3
+    0,      // funct7
+    0,      // rm
+    true,   // isEmpty
+    false,  // isFloat
+    false   // isDouble
+};
+
+EX_MEM_REGISTER RV5SVM::EX_MEM_REG{
+    0,      // alu_result
+    0,      // rs2_value
+    0,      // rd
+    0,      // pc
+    0,      // imm
+    0,      // fcsr_status
+    false,  // mem_to_reg
+    false,  // reg_write
+    false,  // mem_read
+    false,  // mem_write
+    false,  // branch
+    0,      // opcode
+    0,      // funct3
+    0,      // funct7
+    true,   // isEmpty
+    false,  // isFloat
+    false   // isDouble
+};
+
+MEM_WB_REGISTER RV5SVM::MEM_WB_REG{
+    0,      // alu_result
+    0,      // mem_result
+    0,      // rd
+    0,      // imm
+    0,      // pc
+    false,  // mem_to_reg
+    false,  // reg_write
+    0,      // opcode
+    0,      // funct3
+    0,      // funct7
+    true,   // isEmpty
+    false,  // isFloat
+    false   // isDouble
+};
+
 // Execute the IF stage of the pipeline.
 // Fetch the next insturction and send it with PC to the IF_ID register.
 void RV5SVM::IF(){
@@ -840,6 +908,7 @@ void RV5SVM::Run() {
     WB();
     MEM();
     EX();
+    
     ID();
     IF();
     // Increment the insturction counters and cycles.

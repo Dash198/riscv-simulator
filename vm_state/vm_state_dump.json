@@ -1,10 +1,10 @@
 {
     "program_counter": "0x00000038",
     "current_line": 0,
-    "current_instruction": "0x00000013",
+    "current_instruction": "0x00000000",
     "disassembly_line_number": 0,
-    "cycle_count": 14,
-    "instructions_retired": 14,
+    "cycle_count": 18,
+    "instructions_retired": 18,
     "cpi": 0,
     "ipc": 0,
     "stall_cycles": 0,

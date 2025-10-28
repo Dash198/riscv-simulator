@@ -12,8 +12,10 @@
 #include "config.h"
 
 #include <cctype>
+#include <climits>
 #include <cstdint>
 #include <iostream>
+#include <iterator>
 #include <tuple>
 #include <stack>  
 #include <algorithm>
@@ -22,6 +24,7 @@
 #include <condition_variable>
 #include <queue>
 #include <atomic>
+#include <type_traits>
 
 // Load the instruction set and instruction encoding.
 using instruction_set::Instruction;
@@ -893,22 +896,16 @@ void RVSSVM::Run() {
   ClearStop();
   // Number of instructions executed.
   uint64_t instruction_executed = 0;
-
   // Keep going as long as we don't want to stop or PC exceeds the max program size.
-  while (!stop_requested_ && program_counter_ < program_size_) {
+  while(!stop_requested_ && program_counter_ < program_size_){
     // Check if max instructions are exceeded.
-    if (instruction_executed > vm_config::config.getInstructionExecutionLimit())
+    if (stop_requested_ || instruction_executed > vm_config::config.getInstructionExecutionLimit())
       break;
 
-    // Fetch the instruction.
     Fetch();
-    // Decode the instruction.
     Decode();
-    // Execute the operation.
     Execute();
-    // Access memory.
     WriteMemory();
-    // Write to register file.
     WriteBack();
     // Increment the insturction counters and cycles.
     instructions_retired_++;

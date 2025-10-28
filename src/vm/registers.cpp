@@ -21,46 +21,55 @@ void RegisterFile::Reset() {
   csr_[0x002] = 0b000; // Default: RNE (IEEE 754)
 }
 
+// Read a general purpose register.
 uint64_t RegisterFile::ReadGpr(size_t reg) const {
   if (reg >= NUM_GPR) throw std::out_of_range("Invalid GPR index");
   if (reg==0) return 0;
   return gpr_[reg];
 }
 
+// Write to a general purpose register.
 void RegisterFile::WriteGpr(size_t reg, uint64_t value) {
   if (reg >= NUM_GPR) throw std::out_of_range("Invalid GPR index");
   if (reg==0) return;
   gpr_[reg] = value;
 }
 
+// Read from a floating point register.
 uint64_t RegisterFile::ReadFpr(size_t reg) const {
   if (reg >= NUM_FPR) throw std::out_of_range("Invalid FPR index");
   return fpr_[reg];
 }
 
+// Write to a floating point register.
 void RegisterFile::WriteFpr(size_t reg, uint64_t value) {
   if (reg >= NUM_FPR) throw std::out_of_range("Invalid FPR index");
   fpr_[reg] = value;
 }
 
+// Read from CSR.
 uint64_t RegisterFile::ReadCsr(size_t reg) const {
   if (reg >= NUM_CSR) throw std::out_of_range("Invalid CSR index");
   return csr_[reg];
 }
 
+// Write to CSR.
 void RegisterFile::WriteCsr(size_t reg, uint64_t value) {
   if (reg >= NUM_CSR) throw std::out_of_range("Invalid CSR index");
   csr_[reg] = value;
 }
 
+// Get GPR values.
 std::vector<uint64_t> RegisterFile::GetGprValues() const {
   return {gpr_.begin(), gpr_.end()};
 }
 
+// Get FPR values.
 std::vector<uint64_t> RegisterFile::GetFprValues() const {
   return {fpr_.begin(), fpr_.end()};
 }
 
+// Modify a register.
 void RegisterFile::ModifyRegister(const std::string &reg_name, uint64_t value) {
   std::string reg_name_n = reg_alias_to_name.at(reg_name);
   if (IsValidGeneralPurposeRegister(reg_name_n)) {
@@ -75,7 +84,7 @@ void RegisterFile::ModifyRegister(const std::string &reg_name, uint64_t value) {
 }
 
 
-
+// Define the general purpose registers.
 const std::unordered_set<std::string> valid_general_purpose_registers = {
     "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9",
     "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "x18", "x19",
@@ -89,6 +98,7 @@ const std::unordered_set<std::string> valid_general_purpose_registers = {
     "t3", "t4", "t5", "t6",
 };
 
+// Define the floating point registers.
 const std::unordered_set<std::string> valid_floating_point_registers = {
     "f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9",
     "f10", "f11", "f12", "f13", "f14", "f15", "f16", "f17", "f18", "f19",
@@ -104,16 +114,19 @@ const std::unordered_set<std::string> valid_floating_point_registers = {
     "ft28", "ft29", "ft30", "ft31",
 };
 
+// Define the CSR registers.
 const std::unordered_set<std::string> valid_csr_registers = {
     "fflags", "frm", "fcsr"
 };
 
+// CSR to address.
 const std::unordered_map<std::string, int> csr_to_address{
     {"fflags", 0x001},
     {"frm", 0x002},
     {"fcsr", 0x003},
 };
 
+// Translate the register alias to its true name
 const std::unordered_map<std::string, std::string> reg_alias_to_name = {
     {"zero", "x0"},
     {"ra", "x1"},
@@ -254,14 +267,17 @@ const std::unordered_map<std::string, std::string> reg_alias_to_name = {
 
 };
 
+// Check if the given register is a valid GPR.
 bool IsValidGeneralPurposeRegister(const std::string &reg) {
   return valid_general_purpose_registers.find(reg)!=valid_general_purpose_registers.end();
 }
 
+// Check if the given register is a valid FPR.
 bool IsValidFloatingPointRegister(const std::string &reg) {
   return valid_floating_point_registers.find(reg)!=valid_floating_point_registers.end();
 }
 
+// Check if given register is a valid CSR.
 bool IsValidCsr(const std::string &reg) {
   return valid_csr_registers.find(reg)!=valid_csr_registers.end();
 }

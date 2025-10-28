@@ -8,6 +8,7 @@
 #define REGISTERS_H
 
 #include <array>
+#include <pthread.h>
 #include <vector>
 #include <unordered_set>
 #include <unordered_map>
@@ -17,6 +18,8 @@
 /**
  * @brief Represents a register file containing integer, floating-point, and vector registers.
  */
+
+
 class RegisterFile {
  private:
   static constexpr size_t NUM_GPR = 32; ///< Number of General-Purpose Registers (GPR).
@@ -38,8 +41,9 @@ class RegisterFile {
     INTEGER,         ///< General-purpose integer register.
     FLOATING_POINT,  ///< Floating-point register.
     VECTOR,          ///< Vector register.
-    CSR              ///< Control and Status Register (CSR).
+    CSR             ///< Control and Status Register (CSR).
   };
+
 
   RegisterFile();
 

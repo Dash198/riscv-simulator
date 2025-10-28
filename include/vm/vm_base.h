@@ -106,6 +106,8 @@ struct MEM_WB_REGISTER{
   uint8_t funct7;
 
   bool isEmpty;
+  bool isFloat;
+  bool isDouble;
 };
 
 class VmBase {

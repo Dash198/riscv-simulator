@@ -129,10 +129,11 @@ void RVSSVM::IDFP(){
   uint8_t rs2 = (current_instruction >> 20) & 0b11111;
   uint8_t rs3 = (current_instruction >> 27) & 0b11111;
 
+  uint8_t opcode = ID_EX_REG.opcode;
   uint8_t funct7 = ID_EX_REG.funct7;
   ID_EX_REG.rs1_value = registers_.ReadFpr(rs1);
   if (funct7==0b1101000 || funct7==0b1111000 || funct7==0b1101001 || funct7==0b1111001 || opcode==0b0000111 || opcode==0b0100111) {
-    reg1_value = registers_.ReadGpr(rs1);
+    ID_EX_REG.rs1_value = registers_.ReadGpr(rs1);
   }
   if(ID_EX_REG.funct3 == 0b111){
     ID_EX_REG.rm = registers_.ReadCsr(0x002); 
@@ -607,7 +608,7 @@ void RVSSVM::EX(){
 void RVSSVM::EXF(){
   uint8_t opcode = ID_EX_REG.opcode;
   uint8_t funct3 = ID_EX_REG.funct3;
-  uint8_t funct7 = ID_EX_REG.funt7;
+  uint8_t funct7 = ID_EX_REG.funct7;
   uint8_t rm = funct3;
 
   uint8_t fcsr_status = 0;
@@ -618,7 +619,7 @@ void RVSSVM::EXF(){
   uint64_t reg2_value = ID_EX_REG.rs2_value;
   uint64_t reg3_value = ID_EX_REG.rs3_value;
 
-  if(ID_EX_MEM.alu_src){
+  if(ID_EX_REG.alu_src){
     reg2_value = static_cast<uint64_t>(static_cast<int64_t>(imm));
   }
 
@@ -631,7 +632,7 @@ void RVSSVM::EXF(){
 void RVSSVM::EXD(){
   uint8_t opcode = ID_EX_REG.opcode;
   uint8_t funct3 = ID_EX_REG.funct3;
-  uint8_t funct7 = ID_EX_REG.funt7;
+  uint8_t funct7 = ID_EX_REG.funct7;
   uint8_t rm = funct3;
 
   uint8_t fcsr_status = 0;
@@ -642,7 +643,7 @@ void RVSSVM::EXD(){
   uint64_t reg2_value = ID_EX_REG.rs2_value;
   uint64_t reg3_value = ID_EX_REG.rs3_value;
 
-  if(ID_EX_MEM.alu_src){
+  if(ID_EX_REG.alu_src){
     reg2_value = static_cast<uint64_t>(static_cast<int64_t>(imm));
   }
 
@@ -1351,7 +1352,7 @@ void RVSSVM::WB(){
 
   uint64_t new_reg = registers_.ReadGpr(rd);
   if(old_reg!=new_reg){
-    current_delta_.register_changes.push_back({reg_index, reg_type, old_type, new_reg});
+    current_delta_.register_changes.push_back({reg_index, reg_type, old_reg, new_reg});
   }
 }
 
@@ -1366,32 +1367,34 @@ void RVSSVM::WBF(){
   uint64_t new_reg = 0;
 
   if(MEM_WB_REG.reg_write){
-    case get_instr_encoding(Instruction::kfle_s).funct7:
-    case get_instr_encoding(Instruction::kfcvt_w_s).funct7:
-    case get_instr_encoding(Instruction::kfmv_x_w).funct7: {
-      old_reg = registers_.ReadGpr(rd);
-      registers_.WriteGpr(rd, MEM_WB_REG.alu_result);
-      new_reg = MEM_WB_REG.alu_result;
-      reg_type = 0;
-      break;
-    }
+    switch(funct7){
+      case get_instr_encoding(Instruction::kfle_s).funct7:
+      case get_instr_encoding(Instruction::kfcvt_w_s).funct7:
+      case get_instr_encoding(Instruction::kfmv_x_w).funct7: {
+        old_reg = registers_.ReadGpr(rd);
+        registers_.WriteGpr(rd, MEM_WB_REG.alu_result);
+        new_reg = MEM_WB_REG.alu_result;
+        reg_type = 0;
+        break;
+      }
 
-    default: {
-      switch(opcode){
-        case get_instr_encoding(Instruction::kflw).opcode: {
-          old_reg = registers_ReadFpr(rd);
-          register_WriteFpr(rd, MEM_WB_REG.mem_result);
-          new_reg = MEM_WB_REG.mem_result;
-          reg_type = 2;
-          break
-        }
+      default: {
+        switch(opcode){
+          case get_instr_encoding(Instruction::kflw).opcode: {
+            old_reg = registers_.ReadFpr(rd);
+            registers_.WriteFpr(rd, MEM_WB_REG.mem_result);
+            new_reg = MEM_WB_REG.mem_result;
+            reg_type = 2;
+            break;
+          }
 
-        default: {
-          old_reg = registers_.ReadFpr(rd);
-          registers_.WriteFpr(rd, MEM_WB_REG.alu_result);
-          new_reg = MEM_WB_REG.alu_result;
-          reg_type = 2;
-          break;
+          default: {
+            old_reg = registers_.ReadFpr(rd);
+            registers_.WriteFpr(rd, MEM_WB_REG.alu_result);
+            new_reg = MEM_WB_REG.alu_result;
+            reg_type = 2;
+            break;
+          }
         }
       }
     }
@@ -1413,9 +1416,9 @@ void RVSSVM::WBD(){
 
   if(MEM_WB_REG.reg_write){
     if(funct7 == 0b1010001 || funct7 == 0b1100001 || funct7 == 0b1110001){
-      old_reg_ = registers_.ReadGpr(rd);
-      registers_.WriteGpr(rd,   MEM_WB_REG.alu_result);
-      new_reg = MEM_WB_REG.alut_result;
+      old_reg = registers_.ReadGpr(rd);
+      registers_.WriteGpr(rd, MEM_WB_REG.alu_result);
+      new_reg = MEM_WB_REG.alu_result;
       reg_type = 0;
     }
 
@@ -1427,8 +1430,15 @@ void RVSSVM::WBD(){
     }
 
     else{
-      old_reg = registers_.ReadFpr(rd)
+      old_reg = registers_.ReadFpr(rd);
+      registers_.WriteFpr(rd, MEM_WB_REG.alu_result);
+      new_reg = MEM_WB_REG.alu_result;
+      reg_type = 2;
     }
+  }
+
+  if (old_reg!=new_reg) {
+    current_delta_.register_changes.push_back({reg_index, reg_type, old_reg, new_reg});
   }
 }
 

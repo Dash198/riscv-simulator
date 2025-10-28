@@ -1,9 +1,10 @@
 # Fdb version 4
-["pdflatex"] 1761046400.69172 "/home/devansh/repos/riscv-simulator/reports/stage2.tex" "stage2.pdf" "stage2" 1761046400.92169 0
+["pdflatex"] 1761590394.98282 "/home/devansh/repos/riscv-simulator/reports/stage2.tex" "stage2.pdf" "stage2" 1761590395.21451 0
   "/etc/texmf/web2c/texmf.cnf" 1757844960.3219 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/home/devansh/repos/riscv-simulator/reports/stage2.tex" 1761046400.54549 1010 b1a4069ce4d4e0b3ebdf7ec970cb389d ""
+  "/home/devansh/repos/riscv-simulator/reports/stage2.tex" 1761590394.83464 2159 b92bf6110a13287a9942445b48d324ae ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/jknappen/ec/tcrm1000.tfm" 1136768653 1536 e07581a4bb3136ece9eeb4c3ffab8233 ""
+  "/usr/share/texlive/texmf-dist/fonts/tfm/public/cm/cmbx10.tfm" 1136768653 1328 c834bbb027764024c09d3d2bf908b5f0 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/cm/cmbx12.tfm" 1136768653 1324 c910af8c371558dc20f2d7822f66fe64 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/cm/cmmi12.tfm" 1136768653 1524 4414a8315f39513458b80dfc63bff03a ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/cm/cmmi6.tfm" 1136768653 1512 f21f83efb36853c0b70002322c1ab3ad ""
@@ -16,6 +17,7 @@
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/cm/cmsy6.tfm" 1136768653 1116 933a60c408fc0a863a92debe84b2d294 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/cm/cmsy8.tfm" 1136768653 1120 8b7d695260f3cff42e636090a8002094 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/cm/cmtt10.tfm" 1136768653 768 1321e9409b4137d6fb428ac9dc956269 ""
+  "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb" 1248133631 34811 78b52f49e893bcba91bd7581cdc144c0 ""
   "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb" 1248133631 32080 340ef9bf63678554ee606688e7b5339d ""
   "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb" 1248133631 35752 024fb6c41858982481f6968b5fc26508 ""
   "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb" 1248133631 32722 d7379af29a190c3f453aba36302ff5a9 ""
@@ -31,9 +33,9 @@
   "/usr/share/texmf/web2c/texmf.cnf" 1707919699 40399 f2c302f7d2af602abb742093540a5834 ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1757844972.61801 5472669 54eaf61a88b6b7896ebd0dac973cb29c ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1757844983 8213606 012cbd3a31c5f1bc032408c65d9894f9 ""
-  "stage2.aux" 1761046400.90594 245 b5d3b23b6239af14da9527bd60a8c09c "pdflatex"
-  "stage2.tex" 1761046400.54549 1010 b1a4069ce4d4e0b3ebdf7ec970cb389d ""
-  "stage2.toc" 1761046400.90637 131 d732a137841f7c5d99b733895de713b7 "pdflatex"
+  "stage2.aux" 1761590395.19831 245 b5d3b23b6239af14da9527bd60a8c09c "pdflatex"
+  "stage2.tex" 1761590394.83464 2159 b92bf6110a13287a9942445b48d324ae ""
+  "stage2.toc" 1761590395.19831 131 d732a137841f7c5d99b733895de713b7 "pdflatex"
   (generated)
   "stage2.aux"
   "stage2.log"
